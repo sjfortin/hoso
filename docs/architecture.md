@@ -1,0 +1,52 @@
+# Phase 1 architecture decisions
+
+Date: 2026-10-07. Source: `/home/sam/Downloads/relay-mvp-spec.md`, Phase 1 and first-session questions.
+
+## 001 — Same-origin desktop service and mobile PWA
+
+Use Node.js 24 with TypeScript and a small dependency for QR rendering. Serve a plain responsive web client from the desktop. A desktop shell, React, agent orchestration, database, and cloud backend are unnecessary for a message round trip. Node's built-in TypeScript stripping avoids a server build step. Linux is the first target; a background service with local setup UI is the initial packaging shape, not a consumer installer.
+
+The phone calls `/api/pair`, `/api/status`, and `/api/message` over the same origin. Five-second polling provides online/offline state. Every request has a timeout. No message queue or fake success while offline. Phase 1 deterministically acknowledges a message and does not interpret it as an instruction.
+
+## 002 — Tailscale Serve as initial connection provider
+
+The app listens on loopback. Tailscale Serve terminates HTTPS and proxies the same-origin UI/API. Both phone and computer must already be joined to the private network. This is the smallest prototype with no persistent Relay cloud backend. It does not achieve the brief's consumer onboarding goal yet.
+
+The `ConnectionProvider` interface currently supplies the public origin. The HTTP protocol and agent-independent handler do not depend on Tailscale SDKs or peer identities. Future connection lifecycle/discovery or a relay can extend this boundary without changing message semantics. TLS/proxy configuration is operated outside the app for now.
+
+Official sources:
+
+- [Tailscale Serve command](https://tailscale.com/docs/reference/tailscale-cli/serve): private service exposure and HTTPS reverse proxying.
+- [Serve examples](https://tailscale.com/docs/reference/examples/serve): forwarding to a local web service.
+
+Security assumptions: Tailscale protects transport and network reachability; Relay still authenticates paired devices independently. HTTPS makes PWA secure-context features and Secure cookies available. Trust includes the desktop, the browser, the TLS terminator, and the private network configuration. This is not application-layer encryption independent of transport. No public exposure is configured by Relay.
+
+Open questions: managed onboarding without users handling Tailscale accounts, consumer distribution/licensing, phone VPN friction, and relay/WebRTC alternatives. Do not represent these as resolved by Phase 1.
+
+## 003 — Short-lived bearer pairing, persistent hash-only credentials
+
+Desktop startup creates a random 256-bit administration secret, printed in a localhost setup URL fragment. Admin endpoints require that secret and a localhost Host header. The secret is held in tab session storage; restarting invalidates it. Network membership alone does not authorize desktop administration.
+
+Admin creates a random 256-bit pairing secret valid for two minutes. The QR contains an HTTPS URL and the secret in its fragment. Creating a new code invalidates the preceding one. The phone removes the fragment before doing other work, then explicitly exchanges the secret with a phone name. The server serializes state changes, checks expiry/single-use and the one-phone limit, writes a hashed credential atomically, consumes the secret, and sets a fresh random long-term HttpOnly, SameSite=Strict, Secure cookie (Secure omitted only for localhost development).
+
+The computer persists credential hashes, device ID/name, and connection date; secret credentials never enter model context. Revocation clears stored authorization. Origin/Host checks, cross-site fetch rejection, strict JSON validation, small body limits, no CORS, CSP, no-store responses, and pairing rate limits reduce attack surface. An opaque bearer credential is the prototype's “equivalent secure handshake,” not a public-key device identity. QR possession authorizes pairing; there is no secondary desktop approval or proof of physical phone ownership.
+
+Production gaps include OS credential/keychain design, public-key device credentials, broader threat modeling, administrative key storage, expiry/rotation policy, resilient recovery after the cookie response is lost, endpoint-specific abuse controls, and review of transport-independent encryption. State directory must be owned by the user on a trusted local filesystem. Persistence is single-process; multiple Relay instances sharing a state directory are unsupported.
+
+## 004 — Purpose-built runtime; defer Herder
+
+Phase 1 needs only deterministic message acknowledgment, so no agent/runtime dependency is justified. No shell/file tool is exposed. A future tool boundary must independently validate approved operations and paths as required by the spec.
+
+The name “Herder” is ambiguous. Research found [herdrdev/herdr](https://github.com/herdrdev/herdr), a terminal/workspace runtime for coding agents, and [cleonhp88/herder](https://github.com/cleonhp88/herder), a CLI-agent job supervisor with queues, sandboxing, and scheduling. Those capabilities exceed Phase 1 and do not replace Relay's pairing, mobile UI, or consumer permission boundary. The intended project should be identified before any later integration evaluation. No claim of an exhaustive Herder suitability review is made here.
+
+## Phase 1 acceptance
+
+- Desktop setup UI displays an expiring QR code.
+- Mobile web UI pairs one named phone securely over the configured transport.
+- Phone shows computer name and Online/Offline.
+- A valid authenticated message returns “Home Computer received your message.”
+- Unauthorized, replayed, expired, and revoked credentials fail.
+- Phone credentials survive a desktop service restart.
+- No Phase 2 filesystem capabilities or Phase 3 model integration.
+
+Real-device Tailscale acceptance requires the operator's configured private HTTPS address and a phone on that network. Automated local tests exercise the protocol and security boundaries; they cannot prove a phone's VPN configuration or camera/PWA installation experience.

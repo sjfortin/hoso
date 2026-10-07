@@ -1,0 +1,8 @@
+node_modules/
+.relay/
+*.log
+
+# Local tooling and credential mounts
+.aws
+.codex
+.agents
