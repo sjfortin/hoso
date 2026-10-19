@@ -1,8 +1,10 @@
-# Enderloom
+# Hoso
+
+The proposed Android-first voice-to-computer MVP is captured in [MVP direction](docs/mvp-direction.md). The features below describe the current implementation.
 
 Phase 1: connect a phone to your computer, send **Hello**, and receive **Home Computer received your message.**
 
-A small TypeScript/Node desktop service serves the mobile PWA and desktop setup screen. No AI provider, filesystem tools, or Enderloom cloud backend is involved yet.
+A small TypeScript/Node desktop service serves the mobile PWA and desktop setup screen. No AI provider, filesystem tools, or Hoso cloud backend is involved yet.
 
 ## Requirements
 
@@ -22,36 +24,36 @@ Open the **desktop setup link printed in the terminal**. Create a connection cod
 ## Connect a real phone
 
 1. Install/sign in to Tailscale on the computer and phone. Connect both to the same private network.
-2. On the computer, forward the private HTTPS address to Enderloom:
+2. On the computer, forward the private HTTPS address to Hoso:
 
    ```sh
    tailscale serve --bg http://127.0.0.1:4312
    ```
 
    Follow any Tailscale prompt to enable HTTPS. Record the `https://…ts.net` address printed by the command. Use **Serve**, which is private to your network.
-3. Start Enderloom using that exact address, without a path:
+3. Start Hoso using that exact address, without a path:
 
    ```sh
-   ENDERLOOM_PUBLIC_ORIGIN=https://your-computer.your-network.ts.net npm start
+   HOSO_PUBLIC_ORIGIN=https://your-computer.your-network.ts.net npm start
    ```
 
 4. Open the desktop setup link from the terminal. Click **Create a connection code**.
 5. Scan the QR code with the phone camera. Enter a phone name and tap **Connect my phone** before the code expires.
 6. The phone shows **Home Computer · Online**. Send **Hello**. The reply is **Home Computer received your message.**
-7. Optionally add Enderloom to the phone's home screen using the browser's install/share menu. Install support varies by browser.
+7. Optionally add Hoso to the phone's home screen using the browser's install/share menu. Install support varies by browser.
 
-Enderloom stays bound to `127.0.0.1`; do not expose the Node port directly. Stop the service with Ctrl+C. Remove the private proxy when no longer needed using `tailscale serve --https=443 off` (check your existing Serve configuration first).
+Hoso stays bound to `127.0.0.1`; do not expose the Node port directly. Stop the service with Ctrl+C. Remove the private proxy when no longer needed using `tailscale serve --https=443 off` (check your existing Serve configuration first).
 
 ## Settings
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
-| `ENDERLOOM_PORT` | `4312` | Loopback service port; update Serve's target if changed |
-| `ENDERLOOM_PUBLIC_ORIGIN` | `http://localhost:4312` | Phone-facing HTTPS origin, or localhost for development |
-| `ENDERLOOM_COMPUTER_NAME` | `Home Computer` | Name shown on the phone and in replies |
-| `ENDERLOOM_STATE_DIR` | `.relay` | Private credential-hash storage directory |
+| `HOSO_PORT` | `4312` | Loopback service port; update Serve's target if changed |
+| `HOSO_PUBLIC_ORIGIN` | `http://localhost:4312` | Phone-facing HTTPS origin, or localhost for development |
+| `HOSO_COMPUTER_NAME` | `Home Computer` | Name shown on the phone and in replies |
+| `HOSO_STATE_DIR` | `.relay` | Private credential-hash storage directory |
 
-Legacy `FARLOOM_*` and `RELAY_*` settings remain supported (in that order); `ENDERLOOM_*` takes precedence. The internal `.relay` directory and `relay_device` / `relay_admin` browser keys retain their original names to preserve existing pairings and setup sessions.
+Legacy `ENDERLOOM_*`, `FARLOOM_*` and `RELAY_*` settings remain supported (in that order); `HOSO_*` takes precedence. The internal `.relay` directory and `relay_device` / `relay_admin` browser keys retain their original names to preserve existing pairings and setup sessions.
 
 The device credential persists in an HttpOnly cookie for up to a year; the computer stores only its hash in `.relay/devices.json`, with directory mode 0700 and file mode 0600 on Linux. Deleting site data on the phone loses its credential; remove the old phone's access on the desktop before pairing again. Only one phone is supported. **Remove access** revokes its credential. Pending codes and desktop administration credentials are discarded on service restart, while paired phone access persists.
 
@@ -64,7 +66,7 @@ npm test
 
 Tests exercise the real HTTP service: hello round trip, persisted credentials, expiring/single-use/superseded codes, concurrent pairing, revocation, rate limits, origin/host/authentication boundaries, secure cookie attributes, validation, and PWA assets.
 
-For the manual phone acceptance test, pair, send Hello, stop Enderloom, and observe Offline within approximately 5–11 seconds. Restart with the same origin/state directory and verify recovery. Revoke access from desktop and confirm the phone returns to the pairing instructions. A sleeping computer cannot be distinguished reliably from other connectivity failures, so Phase 1 reports Offline.
+For the manual phone acceptance test, pair, send Hello, stop Hoso, and observe Offline within approximately 5–11 seconds. Restart with the same origin/state directory and verify recovery. Revoke access from desktop and confirm the phone returns to the pairing instructions. A sleeping computer cannot be distinguished reliably from other connectivity failures, so Phase 1 reports Offline.
 
 ## Prototype boundaries
 
