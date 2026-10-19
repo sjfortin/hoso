@@ -4,15 +4,15 @@ import { mkdtemp, readFile, stat, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { request as httpRequest } from 'node:http';
-import { createRelay } from '../src/server.ts';
+import { createFarloom } from '../src/server.ts';
 
 async function fixture(t: TestContext, options: Record<string, unknown> = {}) {
-  const dir = await mkdtemp(join(tmpdir(), 'relay-test-'));
-  const relay = await createRelay({ connection: { publicOrigin: 'http://localhost:4312' }, stateDir: dir, ...options });
-  await new Promise<void>(resolve => relay.server.listen(0, '127.0.0.1', resolve));
-  const port = (relay.server.address() as import('node:net').AddressInfo).port;
+  const dir = await mkdtemp(join(tmpdir(), 'farloom-test-'));
+  const farloom = await createFarloom({ connection: { publicOrigin: 'http://localhost:4312' }, stateDir: dir, ...options });
+  await new Promise<void>(resolve => farloom.server.listen(0, '127.0.0.1', resolve));
+  const port = (farloom.server.address() as import('node:net').AddressInfo).port;
   const base = `http://127.0.0.1:${port}`;
-  t.after(async () => { await new Promise<void>(resolve => relay.server.close(() => resolve())); await rm(dir, { recursive: true, force: true }); });
+  t.after(async () => { await new Promise<void>(resolve => farloom.server.close(() => resolve())); await rm(dir, { recursive: true, force: true }); });
   const request = (path: string, body?: unknown, headers: Record<string, string> = {}) => {
     const init = { method: body === undefined ? 'GET' : 'POST', headers: { ...(body === undefined ? {} : { 'Content-Type': 'application/json' }), ...headers }, body: body === undefined ? undefined : JSON.stringify(body) };
     // Node fetch rewrites Host. Raw HTTP is required to test hostile/public Host headers.
@@ -25,10 +25,10 @@ async function fixture(t: TestContext, options: Record<string, unknown> = {}) {
     });
     return fetch(base + path, init);
   };
-  const admin = { Authorization: `Bearer ${relay.adminToken}` };
+  const admin = { Authorization: `Bearer ${farloom.adminToken}` };
   const code = async () => { const response = await request('/api/admin/pair', {}, admin); assert.equal(response.status, 200); const result = await response.json(); assert.match(result.qr, /^data:image\/png;base64,/); return new URLSearchParams(new URL(result.url).hash.slice(1)).get('pair'); };
   const pair = async () => { const token = await code(); const response = await request('/api/pair', { token, name: 'Test Phone' }); assert.equal(response.status, 200); return { token, cookie: response.headers.get('set-cookie')!.split(';')[0] }; };
-  return { ...relay, dir, base, request, admin, code, pair };
+  return { ...farloom, dir, base, request, admin, code, pair };
 }
 
 test('hello round trip, persistence, single-use pairing, one phone, and revocation', async t => {
@@ -43,7 +43,7 @@ test('hello round trip, persistence, single-use pairing, one phone, and revocati
   assert.equal((await f.request('/api/admin/pair', {}, f.admin)).status, 409);
   const stored = await readFile(join(f.dir, 'devices.json'), 'utf8');
   assert.ok(!stored.includes(cookie.split('=')[1])); assert.equal((await stat(join(f.dir, 'devices.json'))).mode & 0o777, 0o600);
-  const restarted = await createRelay({ connection: { publicOrigin: 'http://localhost:4312' }, stateDir: f.dir });
+  const restarted = await createFarloom({ connection: { publicOrigin: 'http://localhost:4312' }, stateDir: f.dir });
   await new Promise<void>(resolve => restarted.server.listen(0, '127.0.0.1', resolve));
   t.after(() => new Promise<void>(resolve => restarted.server.close(() => resolve())));
   const restartPort = (restarted.server.address() as import('node:net').AddressInfo).port;
@@ -108,7 +108,12 @@ test('PWA assets and security headers are served without secrets', async t => {
     const response = await f.request(path); assert.equal(response.status, 200);
     assert.equal(response.headers.get('cache-control'), 'no-store');
     assert.match(response.headers.get('content-security-policy')!, /frame-ancestors 'none'/);
-    assert.ok(!(await response.text()).includes(f.adminToken));
+    const content = await response.text();
+    assert.ok(!content.includes(f.adminToken));
+    if (['/', '/desktop', '/manifest.webmanifest'].includes(path)) {
+      assert.match(content, /Farloom/);
+      assert.doesNotMatch(content, /Relay/);
+    }
   }
 });
 
