@@ -30,8 +30,8 @@ async function checkStatus() {
     if (version !== statusRequest) return;
     setOnline(false);
     if (error.status === 401) { show('unpaired'); }
-    else if (!$('connected').hidden) $('message-error').textContent = "Farloom can't reach your computer right now. Make sure it is turned on and connected to the internet.";
-    else { show('unpaired'); $('unpaired').querySelector('.subtle').textContent = "Farloom can't reach your computer right now. Make sure it is turned on and connected to the internet, then try again."; }
+    else if (!$('connected').hidden) $('message-error').textContent = "Enderloom can't reach your computer right now. Make sure it is turned on and connected to the internet.";
+    else { show('unpaired'); $('unpaired').querySelector('.subtle').textContent = "Enderloom can't reach your computer right now. Make sure it is turned on and connected to the internet, then try again."; }
   }
 }
 $('pair-form').addEventListener('submit', async event => {

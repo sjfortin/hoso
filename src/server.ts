@@ -10,7 +10,7 @@ const equal = (a: string, b: string) => a.length === b.length && timingSafeEqual
 type Device = { id: string; name: string; hash: string; connectedAt: string };
 export interface ConnectionProvider { publicOrigin: string }
 export interface Options { connection: ConnectionProvider; stateDir: string; computerName?: string; pairingLifetimeMs?: number; now?: () => number }
-export async function createFarloom(options: Options) {
+export async function createEnderloom(options: Options) {
   const origin = new URL(options.connection.publicOrigin);
   if (origin.pathname !== '/' || origin.search || origin.hash || origin.username || origin.password ||
       !(origin.protocol === 'https:' || (origin.protocol === 'http:' && ['localhost', '127.0.0.1'].includes(origin.hostname)))) {
@@ -71,7 +71,7 @@ export async function createFarloom(options: Options) {
         try { body = JSON.parse(raw); if (!body || typeof body !== 'object' || Array.isArray(body)) throw Error(); } catch { return send(400, { error: 'Please send a valid request.' }); }
       }
       if (path.startsWith('/api/admin/')) {
-        if (!admin || !localHost) return send(401, { error: 'Open Farloom from the link shown on your computer.' });
+        if (!admin || !localHost) return send(401, { error: 'Open Enderloom from the link shown on your computer.' });
         if (path === '/api/admin/status' && req.method === 'GET') return send(200, { name, devices: devices.map(({ hash, ...d }) => d), publicOrigin: origin.origin });
         if (path === '/api/admin/pair' && req.method === 'POST') {
           if (devices.length) return send(409, { error: 'Remove the connected phone before pairing another.' });
@@ -118,8 +118,8 @@ export async function createFarloom(options: Options) {
       }
       send(404, { error: 'That request is not available.' });
     } catch (error) {
-      console.error('Farloom request failed:', (error as Error).message);
-      if (!res.headersSent) send(500, { error: 'Farloom could not complete that request. Please try again.' }); else res.end();
+      console.error('Enderloom request failed:', (error as Error).message);
+      if (!res.headersSent) send(500, { error: 'Enderloom could not complete that request. Please try again.' }); else res.end();
     }
   });
   server.requestTimeout = 10_000; server.headersTimeout = 10_000;
