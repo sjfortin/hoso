@@ -1,14 +1,25 @@
 # Hoso
 
-The proposed Android-first voice-to-computer MVP is captured in [MVP direction](docs/mvp-direction.md). The features below describe the current implementation.
+Hoso is an easy terminal: create a session on your computer and continue from your phone through text, optional dictation, and simple controls. See the agreed [MVP direction](docs/mvp-direction.md) and [checkpoint / next session](docs/next-session.md).
 
-Phase 1: connect a phone to your computer, send **Hello**, and receive **Home Computer received your message.**
+The current developer prototype includes QR pairing, a shared desktop/phone terminal session, live plain-text output refreshed every second, and explicit input controls. A TypeScript/Node desktop service serves both interfaces. A private Hoso-managed tmux server runs the session; your existing tmux sessions are separate. There is no Hoso cloud backend or bundled AI provider.
 
-A small TypeScript/Node desktop service serves the mobile PWA and desktop setup screen. No AI provider, filesystem tools, or Hoso cloud backend is involved yet.
+## Use a session
+
+1. Start Hoso and open the desktop setup link printed in the terminal.
+2. Choose **Codex agent** (the default) or **Plain terminal**, enter an absolute working folder or leave it empty for home, then choose **Start session**.
+3. Codex launches directly using the installed CLI and its existing sign-in/settings. Complete any startup or permission prompts in the output using the key controls. Codex must already be installed and authenticated on the computer. Plain terminal starts only a shell.
+4. Pair your phone using the instructions below. It opens the same session; you can return to it from either device.
+5. In a Codex session, **Send to Codex** types and submits the message. In a plain terminal, **Insert text** and **Enter** remain separate. Use **Interrupt** to send Ctrl+C. Input goes directly to the foreground program; Hoso does not infer whether an agent is busy, queue messages, or automatically resend uncertain input.
+6. On supported browsers, **Dictate** adds a transcript to the composer for review. Browser speech recognition may send audio to its speech provider; Hoso requests confirmation before starting it. Keyboard dictation remains an alternative.
+7. **End session** stops its programs after confirmation. Disconnecting the phone leaves work running while Hoso and the computer remain running. Stopping Hoso ends the managed session; restart/reboot recovery is not implemented.
+
+Output is a plain-text snapshot at 100 columns, with up to the most recent 1,000 history lines plus the current screen. Color, cursor interaction, full terminal emulation, notifications, and agent-specific approval buttons are not implemented. Interactive programs can use the Enter, Escape, Tab, arrow, and Interrupt controls. Terminal programs run with your computer account's permissions; the selected folder is not a sandbox.
 
 ## Requirements
 
 - Node.js 24 or later.
+- tmux installed on the Linux computer for terminal sessions. Hoso manages its private instance; automatic dependency installation is not implemented.
 - For a real phone: Tailscale installed and signed in on both devices, on the same private network. Your computer must stay awake.
 - Tailscale HTTPS enabled. This developer prototype does not automate Tailscale installation or sign-in.
 
@@ -46,6 +57,10 @@ Hoso stays bound to `127.0.0.1`; do not expose the Node port directly. Stop the 
 
 ## Settings
 
+`npm start` automatically loads an optional `.env` in the project directory. Copy `.env.example` to `.env` for local settings. For phone access, set `HOSO_PUBLIC_ORIGIN` to the exact private HTTPS address printed by Tailscale Serve. Existing shell environment variables take precedence over `.env` values. No AI API key is required by Hoso itself; your terminal agent manages its own authentication.
+
+`.env` and `.env.*` are ignored by Git; only the placeholder `.env.example` is intended to be committed.
+
 | Variable | Default | Purpose |
 | --- | --- | --- |
 | `HOSO_PORT` | `4312` | Loopback service port; update Serve's target if changed |
@@ -64,7 +79,7 @@ npm run check
 npm test
 ```
 
-Tests exercise the real HTTP service: hello round trip, persisted credentials, expiring/single-use/superseded codes, concurrent pairing, revocation, rate limits, origin/host/authentication boundaries, secure cookie attributes, validation, and PWA assets.
+Tests exercise real tmux session input, reconnection snapshots, duplicate suppression, interrupt/end controls, shared desktop/phone access, and the HTTP service: hello round trip, persisted credentials, expiring/single-use/superseded codes, concurrent pairing, revocation, rate limits, origin/host/authentication boundaries, secure cookie attributes, validation, and PWA assets.
 
 For the manual phone acceptance test, pair, send Hello, stop Hoso, and observe Offline within approximately 5–11 seconds. Restart with the same origin/state directory and verify recovery. Revoke access from desktop and confirm the phone returns to the pairing instructions. A sleeping computer cannot be distinguished reliably from other connectivity failures, so Phase 1 reports Offline.
 
@@ -72,6 +87,8 @@ For the manual phone acceptance test, pair, send Hello, stop Hoso, and observe O
 
 HTTPS/Tailscale provide transport encryption; there is no additional application-level end-to-end encryption. Pairing requires possession of the QR secret and access to the private network. An intercepted code can be used before expiry: display it only to the phone owner. This is a prototype security design, with production review still required.
 
-The PWA does not cache messages or files. Conversations are in-memory and disappear on reload. Pairing secrets are URL fragments, removed immediately on load; they are not transmitted in the initial page URL. The desktop administration secret is also a fragment and kept only in that browser tab's session storage. No credentials go to a model or external QR service.
+The PWA does not cache terminal output or files. Terminal output is retained by the running session and fetched again after a page reload. Pairing secrets are URL fragments, removed immediately on load; they are not transmitted in the initial page URL. The desktop administration secret is also a fragment and kept only in that browser tab's session storage. No credentials go to a model or external QR service.
 
 Linux is the first development target. Consumer installation, automatic startup/updates, keychain-backed storage, unattended network setup, and mobile cross-network acceptance are future work. See [architecture decisions](docs/architecture.md) for choices and unresolved questions.
+
+The Codex launcher uses `codex --no-alt-screen` to preserve scrollback, with no permission-bypass flags. See the [official CLI reference](https://learn.chatgpt.com/docs/cli/reference). A Codex session ends when Codex exits; it does not fall back to a shell that could execute later messages as commands.

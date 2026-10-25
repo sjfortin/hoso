@@ -6,3 +6,8 @@ node_modules/
 .aws
 .codex
 .agents
+
+# Local environment settings and secrets
+.env
+.env.*
+!.env.example

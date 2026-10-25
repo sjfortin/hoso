@@ -1,44 +1,69 @@
 # Hoso MVP direction
 
-Updated 2026-10-20. This captures the new product direction; the implementation remains the Phase 1 pairing and message-acknowledgement prototype.
+Updated 2026-10-25. This is the agreed product direction, not a description of shipped features. The implementation now includes a developer session prototype: Hoso-managed tmux, shared desktop/phone controls, polled plain-text output, explicit text/key input, optional browser dictation, and direct Codex launch with a submit button. Basic phone pairing, dictation, reconnection, and a Codex reply have been manually verified. Consumer onboarding, complete agent-task/interrupt/approval acceptance, and agent-aware controls remain unfinished. See [next session](next-session.md). This brief supersedes the earlier file-assistant and existing-session remote-control directions.
 
-## User goal
+## Product
 
-An Android user with no terminal experience can walk around the house, speak requests to their computer, read replies, and continue the same conversation. Start with the OpenAI/ChatGPT ecosystem.
+Hoso is an easy terminal: start work on your computer and interact with it from your phone using text, voice, and simple controls. Hoso owns the session experience, including creating sessions, launching programs, displaying output, and reconnecting to ongoing work.
 
-## Proposed first experience (not yet implemented)
+Users should not need to open another terminal application or manage tmux sessions. Hoso may use tmux internally, but that is a replaceable implementation detail rather than a user prerequisite. The product is not limited to controlling a session started in another app.
 
-1. Install a desktop companion, sign in, choose an allowed working folder, and pair an Android phone by QR code without entering terminal commands.
-2. Open Hoso from the home screen. Dictate or type a message, review it, and send.
-3. See received, working, needs approval, completed, failed, or disconnected states and streamed replies.
-4. Continue the same conversation, including after reopening the phone app. Allow stopping work and answering approval requests from the phone.
-5. Keep work running on the computer while the phone disconnects. Reconnect without resubmitting executed requests.
+## First experience
 
-## Proposed scope
+1. Start the Hoso companion on one computer and pair one Android phone by QR code.
+2. Open Hoso on the phone and create a session in a chosen working folder.
+3. Launch a supported terminal agent from Hoso. Codex CLI is the first supported launch option; a plain shell remains available.
+4. Type an instruction, or explicitly dictate, review the transcript, and send it.
+5. See live output and respond to the program's questions. Keep the composer and common controls easy to reach on a small screen.
+6. Disconnect or lock the phone while the computer keeps working. Reopen Hoso and resume the same session without restarting the program or resending input.
+7. Interrupt work or explicitly end the session from Hoso.
 
-One Android phone, one computer, one selected workspace, and one active conversation. Start with explicit dictation and text replies. Evaluate Codex app-server locally behind Hoso's authenticated service; do not expose the agent directly to the network. ChatGPT sign-in does not by itself establish synchronization with an existing ChatGPT conversation.
+## MVP scope
 
-Keep the existing PWA for the first agent round-trip experiment. A native Android client with a pinned shortcut is the proposed consumer experience; a Quick Settings tile can follow if users need it. Desktop installation, sign-in, connection setup, and approval handling are part of the MVP for nontechnical users.
+One computer, one paired phone, and one active Hoso-managed session. Begin with the existing mobile PWA and desktop service. Use Linux as the first development target; native Android packaging can follow after the core interaction works.
 
-Preserve pairing authentication and enforce runtime permissions on the computer. Do not treat a selected folder in the UI as sufficient sandboxing. Keep model credentials on the computer. Explain model data transmission and account limits during onboarding.
+Text input, live output, explicit voice dictation, reconnection, and interrupt/end controls define the useful first version. Voice is input to the same composer, not a separate assistant or always-listening mode. Keep typed input available when voice is unavailable. Select and validate the dictation implementation before promising browser coverage or local-only audio processing.
 
-## Decisions still needed
+The default experience should feel approachable and conversational. Preserve a terminal view and essential key controls for interactive programs. Arbitrary terminal output is not reliably structured chat: do not infer successful execution, agent state, or an approval request merely from a matching output string.
 
-- First three useful tasks: coding, documents/files, or interaction with desktop applications?
-- First desktop OS: macOS, Windows, or Linux? Existing prototype was Linux-first; current development is on macOS.
-- Same-home-network scope versus remote internet access; a secure, terminal-free connection setup still needs design.
-- Must users continue an existing desktop ChatGPT conversation, or is a Hoso-owned agent conversation acceptable?
-- Confirm account eligibility and integration behavior with a real ChatGPT account before promising consumer availability.
+## Session architecture direction
+
+The authenticated desktop service owns the session lifecycle and streams its output to the paired phone. A session backend boundary should support create, list/status, attach/reconnect, input, resize, interrupt, and end operations.
+
+The initial spike uses a private Hoso-managed tmux server. Real terminal tests cover literal input, duplicate suppression, interrupt, shared access, and reconnect snapshots. Users currently install tmux as a developer dependency; bundled or automated setup remains required for consumer onboarding. Full-screen agent behavior still needs real-device acceptance. Keep the backend replaceable by a directly managed pseudo-terminal if needed.
+
+For the first version, work must survive phone disconnection while the desktop companion remains running. Surviving a companion restart, computer reboot, or computer sleep is a separate capability and must not be implied by that promise. Bound retained output, explain when earlier output is unavailable, and avoid replaying uncertain input automatically after reconnecting.
+
+Retain existing pairing and device revocation. Continue using the project's Tailscale connection for the prototype while keeping networking separate from session behavior. Consumer setup without networking commands remains an onboarding goal, not a shipped capability.
+
+A terminal session has the permissions of the process running it; selecting a working folder does not sandbox it. Keep credentials on the computer and require explicit user intent to send input or end a session. Agent-specific permission handling must preserve the agent's own authorization boundaries.
+
+## Simple buttons for agents
+
+Start with generic controls such as Send, Interrupt, Enter, and End session. Clearly distinguish interrupting a foreground program from ending the session.
+
+Later add agent-aware controls for steering work, responding to approval requests, and changing supported settings. These need a supported agent integration with authoritative state; do not turn guessed terminal text into actionable approval buttons. A structured integration complements the terminal backend without defining the whole product around one agent provider.
+
+## Build order
+
+1. Prove a Hoso-owned local session: create, launch an interactive program, send input, observe output, interrupt, reconnect, and end. Compare backend choices and record the result.
+2. Connect that session to the paired phone with live output, text input, essential key controls, and visible connection status.
+3. Add reviewed voice dictation to the composer and test it on a real Android phone.
+4. Polish the default agent experience and validate the full disconnected/reconnected workflow.
+5. Add richer agent-specific buttons once the first supported agent and integration are selected.
+
+## Acceptance
+
+From the phone, create a session through Hoso, launch the selected agent, send a typed instruction, see output, and answer a prompt. Dictate and review a follow-up before sending. Lock or disconnect the phone, then reconnect to the same running process and retained output without duplicate input. Interrupt work, continue using the session, and explicitly end it. Revoking the phone must prevent further output access and input. Computer unavailability must be visible rather than shown as successful delivery.
+
+## Open implementation decisions
+
+- Validate Codex startup prompts, approvals, and busy-input behavior on a real phone.
+- Hoso-managed tmux versus a directly managed pseudo-terminal.
+- Voice implementation, supported Android browsers, and audio processing location.
+- Output retention and behavior after companion restarts.
+- Consumer installation and connection setup beyond the existing developer prototype.
 
 ## Deferred
 
-Always-listening voice, wake words, simultaneous agents, multiple computers, arbitrary desktop GUI control, and synchronization with unrelated existing chats. These are proposals pending product decisions, not removed capabilities.
-
-## Validation
-
-A first-time user pairs without a terminal, dictates a useful task, approves a requested action, receives a result, follows up with context intact, locks/unlocks the phone, reconnects without duplicate execution, and can stop work. Test computer sleep and account-limit failures explicitly.
-
-Official integration references checked on 2026-10-20:
-- https://learn.chatgpt.com/docs/app-server
-- https://learn.chatgpt.com/docs/auth
-- https://developer.android.com/develop/ui/compose/system/shortcuts/creating-shortcuts
+Multiple simultaneous sessions, multiple computers, always-listening voice, wake words, spoken replies, arbitrary desktop GUI control, polished native mobile packaging, and synchronization with unrelated existing chats.

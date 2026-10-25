@@ -104,7 +104,7 @@ test('HTTPS credentials are secure and admin cannot be used on public host', asy
 
 test('PWA assets and security headers are served without secrets', async t => {
   const f = await fixture(t);
-  for (const path of ['/', '/desktop', '/app.js', '/desktop.js', '/style.css', '/sw.js', '/manifest.webmanifest', '/icon.svg', '/icon-192.png', '/icon-512.png']) {
+  for (const path of ['/', '/desktop', '/app.js', '/desktop.js', '/session.js', '/style.css', '/sw.js', '/manifest.webmanifest', '/icon.svg', '/icon-192.png', '/icon-512.png']) {
     const response = await f.request(path); assert.equal(response.status, 200);
     assert.equal(response.headers.get('cache-control'), 'no-store');
     assert.match(response.headers.get('content-security-policy')!, /frame-ancestors 'none'/);
@@ -129,4 +129,53 @@ test('Unicode messages remain valid across HTTP chunk boundaries', async t => {
     setTimeout(() => req.end(bytes.subarray(split)), 10);
   });
   assert.equal(result, 200);
+});
+
+test('session access requires local administration or a paired phone and revokes immediately', async t => {
+  const f = await fixture(t);
+  assert.equal((await f.request('/api/session')).status, 401);
+  assert.equal((await f.request('/api/session', { action: 'create', folder: '/tmp' })).status, 401);
+  assert.equal((await f.request('/api/admin/session')).status, 401);
+  assert.deepEqual(await (await f.request('/api/admin/session', undefined, f.admin)).json(), { session: null });
+  assert.equal((await f.request('/api/admin/session', undefined, { ...f.admin, Host: 'other.ts.net' })).status, 403);
+  const { cookie } = await f.pair();
+  assert.deepEqual(await (await f.request('/api/session', undefined, { Cookie: cookie })).json(), { session: null });
+  assert.equal((await f.request('/api/session', { action: 'enter' }, { Cookie: cookie, Origin: 'https://evil.example' })).status, 403);
+  await f.request('/api/admin/revoke', {}, f.admin);
+  assert.equal((await f.request('/api/session', undefined, { Cookie: cookie })).status, 401);
+});
+
+
+test('desktop-created session is shared with the phone and remains after revocation', async t => {
+  const f = await fixture(t);
+  t.after(() => f.closeSessions());
+  const created = await f.request('/api/admin/session', { action: 'create', folder: '/tmp' }, f.admin);
+  assert.equal(created.status, 200);
+  const { session } = await created.json();
+  const { cookie } = await f.pair();
+  const phone = { Cookie: cookie };
+  assert.equal((await (await f.request('/api/session', undefined, phone)).json()).session.id, session.id);
+  const input = { action: 'text', text: "printf 'phone-%s\\n' 'connected'", sessionId: session.id, requestId: 'http-input-00000001' };
+  assert.equal((await f.request('/api/session', input, phone)).status, 200);
+  assert.equal((await (await f.request('/api/session', input, phone)).json()).duplicate, true);
+  assert.equal((await f.request('/api/session', { action: 'enter', sessionId: session.id, requestId: 'http-enter-00000001' }, phone)).status, 200);
+  await f.request('/api/admin/revoke', {}, f.admin);
+  assert.equal((await f.request('/api/session', undefined, phone)).status, 401);
+  assert.equal((await f.request('/api/session', { ...input, requestId: 'http-revoked-000001' }, phone)).status, 401);
+  assert.equal((await (await f.request('/api/admin/session', undefined, f.admin)).json()).session.id, session.id);
+  assert.equal((await f.request('/api/admin/session', { action: 'end', sessionId: session.id, requestId: 'http-end-000000001' }, f.admin)).status, 200);
+});
+
+
+test('QR cross-site navigation loads public assets but cannot access APIs', async t => {
+  const f = await fixture(t, { connection: { publicOrigin: 'https://computer.example' } });
+  const scanned = { Host: 'computer.example', 'Sec-Fetch-Site': 'cross-site', 'Sec-Fetch-Mode': 'navigate' };
+  for (const path of ['/', '/app.js', '/session.js', '/style.css']) {
+    assert.equal((await f.request(path, undefined, scanned)).status, 200);
+  }
+  assert.equal((await f.request('/api/status', undefined, scanned)).status, 403);
+  assert.equal((await f.request('/api/session', undefined, scanned)).status, 403);
+  assert.equal((await f.request('/api/pair', { token: 'example', name: 'Phone' }, scanned)).status, 403);
+  assert.equal((await f.request('/', undefined, { ...scanned, Host: 'evil.example' })).status, 403);
+  assert.equal((await f.request('/', undefined, { ...scanned, Origin: 'https://evil.example' })).status, 403);
 });

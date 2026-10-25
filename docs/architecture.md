@@ -50,3 +50,29 @@ The name “Herder” is ambiguous. Research found [herdrdev/herdr](https://gith
 - No Phase 2 filesystem capabilities or Phase 3 model integration.
 
 Real-device Tailscale acceptance requires the operator's configured private HTTPS address and a phone on that network. Automated local tests exercise the protocol and security boundaries; they cannot prove a phone's VPN configuration or camera/PWA installation experience.
+
+
+## 005 — Hoso-owned session prototype (2026-10-25)
+
+The new MVP direction supersedes the Phase 1-only product scope above. Hoso owns one terminal session in a private tmux server with a randomly created, private temporary socket directory and no user tmux configuration. It does not attach to existing sessions. Node invokes tmux with argument arrays; text is encoded as hexadecimal bytes to keep terminal text out of tmux's command parser. Input control characters and multiline text are rejected; essential keys are separate actions.
+
+Desktop access uses the existing localhost-only admin credential; phone access uses the existing paired-device cookie. Both call the same serialized session backend. Device authorization is rechecked when queued operations execute. Request identifiers prevent repeated input within the running session, and stale session identifiers are rejected. An uncertain delivery is not automatically retried. Revocation prevents further phone access without stopping desktop work.
+
+The client polls bounded plain-text screen/history snapshots once per second while visible. This provides reconnectable output without an open stream or a terminal emulator dependency. It does not preserve terminal colors, expose a reliable agent-busy state, or implement structured approvals. The terminal has a fixed 100-by-32 viewport. The desktop and phone share that viewport; independent device resizing is deferred.
+
+Disconnecting a phone leaves the process running. Normal companion shutdown ends its private tmux server; crash/reboot recovery and durable input receipts are not promised. The private socket is accessible to the same OS user; that user and terminal programs are trusted. A working directory is not a permission boundary.
+
+Browser SpeechRecognition is optional and requires explicit user activation. Audio may be processed by the browser's speech provider; transcripts remain in the composer until the user inserts them. No audio is uploaded by Hoso's service. Actual Android/browser support remains a manual acceptance item.
+
+References: [tmux manual](https://man.openbsd.org/tmux), [SpeechRecognition](https://developer.mozilla.org/en-US/docs/Web/API/SpeechRecognition).
+
+
+## 006 — Explicit agent launch and submission
+
+New-session UI defaults to Codex, with Plain terminal as an explicit alternative. The service resolves the installed Codex executable from its PATH and launches it directly with `--no-alt-screen`; a missing installation produces a setup error rather than silently falling back to a shell. No sandbox or approval settings are overridden. Startup/sign-in/trust prompts remain visible and require the user's response.
+
+Codex sessions have a Send to Codex action that sends literal input followed by Enter after a 300 ms pause for Codex’s paste detection, in one serialized operation, sharing the existing request deduplication. Plain terminal retains separate Insert text and Enter controls. The chosen mode is stored in session metadata and displayed on both devices. Codex exit retains final output and cannot fall back into a shell. This remains terminal input rather than a structured agent protocol: busy-state inference and agent-aware approvals are not implemented.
+
+Tests use a local deterministic agent stand-in to verify executable launch, startup arguments, message submission, and duplicate suppression without model calls. A separate startup smoke check verified the installed Codex process starts inside a Hoso session. A complete real-agent task still requires phone acceptance.
+
+The submission fix was also checked with a harmless real Codex prompt that requested a fixed reply and prohibited tool use or file changes. The deterministic agent test emulates a TUI that interprets Enter during a paste burst as a newline.

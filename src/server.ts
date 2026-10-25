@@ -3,6 +3,7 @@ import { randomBytes, createHash, timingSafeEqual } from 'node:crypto';
 import { readFile, mkdir, writeFile, rename, chmod } from 'node:fs/promises';
 import { join } from 'node:path';
 import QRCode from 'qrcode';
+import { Sessions, SessionError } from './sessions.ts';
 
 const digest = (value: string) => createHash('sha256').update(value).digest('hex');
 const secret = () => randomBytes(32).toString('base64url');
@@ -41,10 +42,12 @@ export async function createHoso(options: Options) {
   const assets: Record<string, [string, string]> = {
     '/': ['index.html', 'text/html'], '/desktop': ['desktop.html', 'text/html'],
     '/app.js': ['app.js', 'text/javascript'], '/desktop.js': ['desktop.js', 'text/javascript'],
+    '/session.js': ['session.js', 'text/javascript'],
     '/style.css': ['style.css', 'text/css'], '/manifest.webmanifest': ['manifest.webmanifest', 'application/manifest+json'],
     '/sw.js': ['sw.js', 'text/javascript'], '/icon.svg': ['icon.svg', 'image/svg+xml'],
     '/icon-192.png': ['icon-192.png', 'image/png'], '/icon-512.png': ['icon-512.png', 'image/png']
   };
+  const sessions = new Sessions();
   const server = http.createServer(async (req, res) => {
     const send = (status: number, data: unknown) => { res.writeHead(status, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(data)); };
     res.setHeader('Cache-Control', 'no-store');
@@ -56,8 +59,11 @@ export async function createHoso(options: Options) {
       const localHost = /^(localhost|127\.0\.0\.1):\d+$/.test(host);
       if (host !== origin.host && !localHost) return send(403, { error: 'This connection is not allowed.' });
       if (req.headers.origin && req.headers.origin !== origin.origin && !(localHost && req.headers.origin === `http://${host}`)) return send(403, { error: 'This connection is not allowed.' });
-      if (req.headers['sec-fetch-site'] === 'cross-site') return send(403, { error: 'This connection is not allowed.' });
       const path = new URL(req.url ?? '/', origin).pathname;
+      // QR scanners may open the public landing page as a cross-site navigation.
+      // Static assets contain no credentials; keep every API request protected.
+      const publicAsset = req.method === 'GET' && Object.hasOwn(assets, path);
+      if (req.headers['sec-fetch-site'] === 'cross-site' && !publicAsset) return send(403, { error: 'This connection is not allowed.' });
       const admin = equal(String(req.headers.authorization ?? ''), `Bearer ${adminToken}`);
       const cookies = String(req.headers.cookie ?? '').split(';').map(x => x.trim());
       const token = cookies.find(x => x.startsWith('relay_device='))?.slice(13) ?? '';
@@ -69,6 +75,20 @@ export async function createHoso(options: Options) {
         for await (const chunk of req) { size += chunk.length; if (size > 8192) return send(413, { error: 'Your message is too long.' }); chunks.push(chunk); }
         const raw = Buffer.concat(chunks).toString('utf8');
         try { body = JSON.parse(raw); if (!body || typeof body !== 'object' || Array.isArray(body)) throw Error(); } catch { return send(400, { error: 'Please send a valid request.' }); }
+      }
+      if (path === '/api/session' || path === '/api/admin/session') {
+        const authorized = () => path === '/api/admin/session'
+          ? admin && localHost
+          : devices.some(d => equal(d.hash, digest(token)));
+        if (!authorized()) return send(401, { error: 'Open Hoso on your computer or pair your phone first.' });
+        if (!['GET', 'POST'].includes(req.method ?? '')) return send(405, { error: 'That request is not available.' });
+        const result = await sessions.exclusive(async () => {
+          if (!authorized()) throw new SessionError('This device no longer has access.', 401);
+          if (req.method === 'GET') return sessions.snapshot();
+          if (body.action === 'create') return sessions.create(body.folder, body.launcher);
+          return sessions.action(body);
+        });
+        return send(200, result);
       }
       if (path.startsWith('/api/admin/')) {
         if (!admin || !localHost) return send(401, { error: 'Open Hoso from the link shown on your computer.' });
@@ -118,10 +138,12 @@ export async function createHoso(options: Options) {
       }
       send(404, { error: 'That request is not available.' });
     } catch (error) {
+      if (error instanceof SessionError) return send(error.status, { error: error.message });
       console.error('Hoso request failed:', (error as Error).message);
       if (!res.headersSent) send(500, { error: 'Hoso could not complete that request. Please try again.' }); else res.end();
     }
   });
   server.requestTimeout = 10_000; server.headersTimeout = 10_000;
-  return { server, adminToken };
+  server.on('close', () => { void sessions.close(); });
+  return { server, adminToken, closeSessions: () => sessions.close() };
 }
