@@ -37,7 +37,7 @@ Hoso is the easy terminal. It owns sessions on the computer, with a simple deskt
 4. Decide the next interface pass using the [shadcn/ui component assessment](ui-components-assessment.md). Preserve terminal output for setup/approval prompts and keep the composer prominent. Do not infer authoritative busy/approval state from terminal text.
 5. Consider whether to add session restart recovery or notifications only after this interaction is comfortable.
 
-Use observations from the phone tests to drive the next code changes. No full terminal emulator, structured approval protocol, or frontend framework migration has been added.
+Use observations from the phone tests to drive the next code changes. No full terminal emulator or structured approval protocol has been added. A shared React/shadcn frontend has now been implemented; see the migration checkpoint below.
 
 ## Important implementation details
 
@@ -55,3 +55,16 @@ Use observations from the phone tests to drive the next code changes. No full te
 ## Deferred
 
 Native mobile packaging, consumer installation, automatic dependency/network setup, push notifications, multiple sessions/computers, durable restart recovery, full terminal rendering, and agent-specific action cards.
+
+
+## Frontend migration checkpoint (2026-10-27)
+
+The user approved implementing shadcn after the workflow checkpoint was committed/pushed as `d543976`. Phone and desktop now share a React interface built by Vite/Tailwind, with shadcn Base UI Button, Input, Textarea, Sheet, and Alert Dialog modules. The palette, same-origin HTTP protocol, pairing cookie, local admin session storage, explicit controls, bounded output, and uncertain-delivery behavior remain.
+
+New interface: text/voice composer, responsive bottom/right sheet with keyboard controls including Confirm / Enter, cancellation-focused confirmation dialogs, input delivery feedback, and a Latest output button. Ordinary refresh/reconnect preserves a draft; a different session clears it. React StrictMode bootstrap/poll races and stale dictation status were addressed during tests.
+
+Production HTML receives a fresh CSP nonce matching Base UI's CSPProvider. JS/CSS stay external and same-origin. Only built asset filenames are served; old frontend scripts and unpublished/source paths return 404. `npm start`, `npm test`, and `npm run acceptance` build first. A frontend watch rebuild currently requires restarting Hoso, which ends its active session.
+
+Validation includes the existing HTTP/tmux suite, a new built-assets/CSP check, and nine React interaction checks for pairing, uncertain delivery, dialogs, revocation, session draft changes, mobile sheet behavior, and reviewed dictation. Real browser visual QA is unavailable in this environment, so inspect the interface on an actual phone with keyboard open/closed, then confirm live pairing/send/approval/interrupt/reconnect once more.
+
+Release verification also covers non-overlapping slow auth polling, disables open confirmation actions when offline, and adds `start:production` for a prebuilt artifact with production-only dependencies. Phone visual/keyboard/microphone acceptance remains outstanding.

@@ -1,6 +1,6 @@
 import http from 'node:http';
 import { randomBytes, createHash, timingSafeEqual } from 'node:crypto';
-import { readFile, mkdir, writeFile, rename, chmod } from 'node:fs/promises';
+import { readFile, mkdir, writeFile, rename, chmod, readdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import QRCode from 'qrcode';
 import { Sessions, SessionError } from './sessions.ts';
@@ -39,21 +39,27 @@ export async function createHoso(options: Options) {
   };
   let pairing: { hash: string; expiresAt: number } | undefined;
   const attempts = new Map<string, { count: number; until: number }>();
+  const assetRoot = new URL('../dist/', import.meta.url);
   const assets: Record<string, [string, string]> = {
     '/': ['index.html', 'text/html'], '/desktop': ['desktop.html', 'text/html'],
-    '/app.js': ['app.js', 'text/javascript'], '/desktop.js': ['desktop.js', 'text/javascript'],
-    '/session.js': ['session.js', 'text/javascript'],
-    '/style.css': ['style.css', 'text/css'], '/manifest.webmanifest': ['manifest.webmanifest', 'application/manifest+json'],
+    '/manifest.webmanifest': ['manifest.webmanifest', 'application/manifest+json'],
     '/sw.js': ['sw.js', 'text/javascript'], '/icon.svg': ['icon.svg', 'image/svg+xml'],
     '/icon-192.png': ['icon-192.png', 'image/png'], '/icon-512.png': ['icon-512.png', 'image/png']
   };
+  // Only explicitly built assets are served. Unknown paths never fall back to HTML.
+  for (const entry of await readdir(new URL('assets/', assetRoot), { withFileTypes: true })) {
+    if (entry.isFile() && /^[A-Za-z0-9_.-]+\.(js|css)$/.test(entry.name)) {
+      assets[`/assets/${entry.name}`] = [`assets/${entry.name}`, entry.name.endsWith('.css') ? 'text/css' : 'text/javascript'];
+    }
+  }
   const sessions = new Sessions();
   const server = http.createServer(async (req, res) => {
     const send = (status: number, data: unknown) => { res.writeHead(status, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(data)); };
     res.setHeader('Cache-Control', 'no-store');
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('Referrer-Policy', 'no-referrer');
-    res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; worker-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'");
+    const styleNonce = secret();
+    res.setHeader('Content-Security-Policy', `default-src 'self'; script-src 'self' 'nonce-${styleNonce}'; style-src 'self' 'nonce-${styleNonce}'; img-src 'self' data:; connect-src 'self'; worker-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'`);
     try {
       const host = req.headers.host ?? '';
       const localHost = /^(localhost|127\.0\.0\.1):\d+$/.test(host);
@@ -132,9 +138,11 @@ export async function createHoso(options: Options) {
         if (typeof body.message !== 'string' || !body.message.trim() || body.message.length > 2000) return send(400, { error: 'Enter a message of up to 2,000 characters.' });
         return send(200, { message: `${name} received your message.`, receivedAt: new Date(now()).toISOString() });
       }
-      if (req.method === 'GET' && assets[path]) {
-        const [file, type] = assets[path]; res.writeHead(200, { 'Content-Type': type });
-        return res.end(await readFile(new URL(`../public/${file}`, import.meta.url)));
+      if (req.method === 'GET' && Object.hasOwn(assets, path)) {
+        const [file, type] = assets[path];
+        const content = await readFile(new URL(file, assetRoot));
+        res.writeHead(200, { 'Content-Type': type });
+        return res.end(type === 'text/html' ? content.toString('utf8').replaceAll('__HOSO_STYLE_NONCE__', styleNonce) : content);
       }
       send(404, { error: 'That request is not available.' });
     } catch (error) {

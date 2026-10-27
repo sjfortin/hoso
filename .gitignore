@@ -21,3 +21,6 @@ node_modules/
 !/.agents/skills/writing-for-agents/
 !/.agents/skills/MATT-POCOCK-LICENSE.txt
 !/.agents/skills/SOURCES.json
+
+# Generated frontend build
+dist/

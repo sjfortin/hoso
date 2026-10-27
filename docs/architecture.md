@@ -85,3 +85,16 @@ The real task check exposed shared-daemon command-center behavior, so Hoso now a
 The opt-in `npm run acceptance` starts an isolated service and uses the same admin/pair/device HTTP protocol as the clients. It checks real file edits, interrupt/redirection, credential revocation, re-pairing, and lack of a late completion marker after an interrupted command's deadline. It accepts folder trust only for its own generated inert project. It does not automatically answer command-permission prompts. Tests use the installed CLI/account, so they are separate from the deterministic regression suite and keep local diagnostics in ignored state storage.
 
 The interface groups secondary key controls and provides explicit delivery acknowledgements. No busy/completed/approval state is inferred from output. Browser layout, microphone behavior, screen lock, and mobile approval handling remain real-device acceptance items.
+
+
+## 008 — Shared React frontend with shadcn/Base UI (2026-10-27)
+
+The frontend is now a Vite multipage build for `/` and `/desktop`, sharing the same React workspace implementation. Tailwind supplies component styles; copied shadcn base-nova modules wrap Base UI primitives for buttons, fields, a responsive controls sheet, and confirmation dialogs. React is a view/controller change, not an agent runtime or protocol replacement. Source/license details live in `frontend/README.md`.
+
+Pair/admin fragments are consumed once outside React rendering. Phone credentials remain HttpOnly cookies; the desktop credential stays in tab session storage and is attached only from the desktop page. Polling uses request generations so stale reads cannot restore revoked output or overwrite mutation state. Uncertain input remains visible and is never automatically replayed. Changing the session clears the old draft; reconnecting to the same session preserves it.
+
+The local Node service serves only named pages, published PWA files, and the JS/CSS files found in the generated asset directory at startup. HTML gets a fresh nonce included in both CSP and Base UI's CSPProvider, permitting its intentional inline style tags without `unsafe-inline` or `unsafe-eval`. User terminal output is rendered as text. Build artifacts are ignored; startup and tests build automatically. Frontend watch rebuilds currently require a service restart to refresh the asset allowlist.
+
+React DOM interaction tests exercise pairing under StrictMode, failed-delivery draft preservation, confirmation focus and modal key handling, revoked stale reads, session draft changes, mobile sheet behavior, and dictated transcript review. They do not replace browser layout, microphone, or mobile VPN acceptance.
+
+`npm run start:production` serves a prebuilt artifact without frontend build dependencies. Release verification uses a disposable production-only install as well as the regression suite. Auth status polling, like session polling, avoids overlapping requests so slow status responses are not continually invalidated. Confirmation actions become disabled when their caller is offline or otherwise disabled.

@@ -2,7 +2,7 @@
 
 Hoso is an easy terminal: create a session on your computer and continue from your phone through text, optional dictation, and simple controls. See the agreed [MVP direction](docs/mvp-direction.md), [checkpoint / next session](docs/next-session.md), [project development skills](docs/skills.md), and [UI component assessment](docs/ui-components-assessment.md).
 
-The current developer prototype includes QR pairing, a shared desktop/phone terminal session, live plain-text output refreshed every second, and explicit input controls. A TypeScript/Node desktop service serves both interfaces. A private Hoso-managed tmux server runs the session; your existing tmux sessions are separate. There is no Hoso cloud backend or bundled AI provider.
+The current developer prototype includes QR pairing, a shared desktop/phone terminal session, live plain-text output refreshed every second, and explicit input controls. A TypeScript/Node desktop service serves both interfaces from a shared React + shadcn/Base UI frontend, built with Vite and Tailwind. A private Hoso-managed tmux server runs the session; your existing tmux sessions are separate. There is no Hoso cloud backend or bundled AI provider.
 
 ## Use a session
 
@@ -10,11 +10,11 @@ The current developer prototype includes QR pairing, a shared desktop/phone term
 2. Choose **Codex agent** (the default) or **Plain terminal**, enter an absolute working folder or leave it empty for home, then choose **Start session**.
 3. Codex launches directly using the installed CLI and its existing sign-in/settings. Complete any startup or permission prompts in the output using the key controls. Codex must already be installed and authenticated on the computer. Plain terminal starts only a shell.
 4. Pair your phone using the instructions below. It opens the same session; you can return to it from either device.
-5. In a Codex session, **Send to Codex** types and submits the message. In a plain terminal, **Insert text** and **Enter** remain separate. Use **Interrupt** to send Ctrl+C. Input goes directly to the foreground program; Hoso does not infer whether an agent is busy, queue messages, or automatically resend uncertain input.
+5. In a Codex session, **Send** types and submits the message. In a plain terminal, **Insert text** and **Enter** remain separate. Use **Interrupt** to send Ctrl+C. Input goes directly to the foreground program; Hoso does not infer whether an agent is busy, queue messages, or automatically resend uncertain input.
 6. On supported browsers, **Dictate** adds a transcript to the composer for review. Browser speech recognition may send audio to its speech provider; Hoso requests confirmation before starting it. Keyboard dictation remains an alternative.
 7. **End session** stops its programs after confirmation. Disconnecting the phone leaves work running while Hoso and the computer remain running. Stopping Hoso ends the managed session; restart/reboot recovery is not implemented.
 
-Output is a plain-text snapshot at 100 columns, with up to the most recent 1,000 history lines plus the current screen. Color, cursor interaction, full terminal emulation, notifications, and agent-specific approval buttons are not implemented. Use **Confirm / Enter** to answer the highlighted setup or approval choice. **More controls** contains Escape, Tab, arrows, and End session; **Latest output** returns to the bottom after reading earlier output. Terminal programs run with your computer account's permissions; the selected folder is not a sandbox.
+Output is a plain-text snapshot at 100 columns, with up to the most recent 1,000 history lines plus the current screen. Color, cursor interaction, full terminal emulation, notifications, and agent-specific approval buttons are not implemented. The **More controls** sheet keeps extra keys and End session out of the main flow. End-session, phone-revocation, and dictation confirmations use accessible dialogs. Use **Confirm / Enter** to answer the highlighted setup or approval choice. **More controls** contains Escape, Tab, arrows, and End session; **Latest output** returns to the bottom after reading earlier output. Terminal programs run with your computer account's permissions; the selected folder is not a sandbox.
 
 ## Requirements
 
@@ -30,7 +30,24 @@ npm install
 npm start
 ```
 
+`npm start` builds the frontend before starting Hoso. The generated `dist/` directory is ignored by Git. Shared frontend source is in `frontend/src`; copied shadcn components, license, and maintenance notes are documented in [frontend/README.md](frontend/README.md). No frontend assets are loaded from a CDN.
+
+For frontend development, `npm run watch:frontend` rebuilds on changes. Restart Hoso after a rebuild so its asset allowlist picks up the new filenames; this first migration does not provide hot reload. Restarting Hoso ends its active session. `npm run check` checks server and frontend TypeScript. `npm test` builds first, then runs HTTP/tmux tests and React interaction tests.
+
 Open the **desktop setup link printed in the terminal**. Create a connection code. The default code points to localhost, so it can only be used on this computer. For a local smoke test, decode the QR with a camera/QR tool and open its URL in a second browser context on the computer. Keep the setup link private: it authorizes pairing and revocation.
+
+## Prebuilt deployment
+
+See the [frontend release verification](docs/frontend-release-check.md) for the tested scope and remaining real-phone checks.
+
+For the usual laptop setup, keep using `npm start`; it builds before starting. For a deployment where build tools are omitted, build with the full development dependencies, then deploy `src/`, `dist/`, `package.json`, and `package-lock.json`. On that target:
+
+```sh
+npm ci --omit=dev --ignore-scripts
+npm run start:production
+```
+
+`start:production` serves the existing build without invoking Vite. Keep Node.js 24+, tmux, your agent installation/sign-in, `.env`, and private Tailscale Serve setup on the target. Keep local credentials/state out of the artifact. Restarting the companion ends its active session.
 
 ## Connect a real phone
 
@@ -50,7 +67,7 @@ Open the **desktop setup link printed in the terminal**. Create a connection cod
 
 4. Open the desktop setup link from the terminal. Click **Create a connection code**.
 5. Scan the QR code with the phone camera. Enter a phone name and tap **Connect my phone** before the code expires.
-6. The phone shows **Home Computer · Online** and the shared session. Start a Codex session if needed, answer any startup prompts, and send a task using **Send to Codex**.
+6. The phone shows **Home Computer · Online** and the shared session. Start a Codex session if needed, answer any startup prompts, and send a task using **Send**.
 7. Optionally add Hoso to the phone's home screen using the browser's install/share menu. Install support varies by browser.
 
 Hoso stays bound to `127.0.0.1`; do not expose the Node port directly. Stop the service with Ctrl+C. Remove the private proxy when no longer needed using `tailscale serve --https=443 off` (check your existing Serve configuration first).

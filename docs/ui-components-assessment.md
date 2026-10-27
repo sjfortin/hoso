@@ -1,6 +1,6 @@
 # UI component assessment
 
-Reviewed 2026-10-27 against Hoso's current plain HTML/CSS/JavaScript PWA and official shadcn/ui documentation. This is a recommendation, not an installed dependency or an approved frontend migration.
+Reviewed 2026-10-27 against Hoso's current plain HTML/CSS/JavaScript PWA and official shadcn/ui documentation. The user approved implementation later on 2026-10-27. The shared React/Vite/Tailwind frontend now uses copied shadcn Base UI Button, Input, Textarea, Sheet, and Alert Dialog modules. The findings below record the assessment that informed that work.
 
 ## Recommendation
 
@@ -64,4 +64,4 @@ Validate these interactions with the Android browser and installed PWA:
 - Short status changes are announced; repeated full-screen terminal snapshots do not flood a live region. Errors remain visible until acted on or resolved.
 - Output scrolling does not jump while reading earlier content; Latest output deliberately resumes the current view. Reduced motion, 200% zoom, narrow landscape and disconnected/revoked states remain usable.
 
-No frontend packages were installed and no application files were changed for this assessment.
+The assessment itself made no application changes. The subsequent implementation is documented in [frontend notes](../frontend/README.md).

@@ -104,7 +104,7 @@ test('HTTPS credentials are secure and admin cannot be used on public host', asy
 
 test('PWA assets and security headers are served without secrets', async t => {
   const f = await fixture(t);
-  for (const path of ['/', '/desktop', '/app.js', '/desktop.js', '/session.js', '/style.css', '/sw.js', '/manifest.webmanifest', '/icon.svg', '/icon-192.png', '/icon-512.png']) {
+  for (const path of ['/', '/desktop', '/sw.js', '/manifest.webmanifest', '/icon.svg', '/icon-192.png', '/icon-512.png']) {
     const response = await f.request(path); assert.equal(response.status, 200);
     assert.equal(response.headers.get('cache-control'), 'no-store');
     assert.match(response.headers.get('content-security-policy')!, /frame-ancestors 'none'/);
@@ -170,7 +170,10 @@ test('desktop-created session is shared with the phone and remains after revocat
 test('QR cross-site navigation loads public assets but cannot access APIs', async t => {
   const f = await fixture(t, { connection: { publicOrigin: 'https://computer.example' } });
   const scanned = { Host: 'computer.example', 'Sec-Fetch-Site': 'cross-site', 'Sec-Fetch-Mode': 'navigate' };
-  for (const path of ['/', '/app.js', '/session.js', '/style.css']) {
+  const landing = await (await f.request('/', undefined, scanned)).text();
+  const builtAssets = Array.from(landing.matchAll(/(?:src|href)="(\/assets\/[^"]+)"/g), match => match[1]);
+  assert.ok(builtAssets.length >= 2);
+  for (const path of ['/', ...builtAssets]) {
     assert.equal((await f.request(path, undefined, scanned)).status, 200);
   }
   assert.equal((await f.request('/api/status', undefined, scanned)).status, 403);
@@ -178,4 +181,31 @@ test('QR cross-site navigation loads public assets but cannot access APIs', asyn
   assert.equal((await f.request('/api/pair', { token: 'example', name: 'Phone' }, scanned)).status, 403);
   assert.equal((await f.request('/', undefined, { ...scanned, Host: 'evil.example' })).status, 403);
   assert.equal((await f.request('/', undefined, { ...scanned, Origin: 'https://evil.example' })).status, 403);
+});
+
+
+test('built frontend has matching unique CSP nonces and only serves published assets', async t => {
+  const f = await fixture(t);
+  let previousNonce = '';
+  for (const page of ['/', '/desktop']) {
+    const response = await f.request(page);
+    const html = await response.text();
+    const nonce = html.match(/name="hoso-style-nonce" content="([A-Za-z0-9_-]+)"/)?.[1];
+    assert.ok(nonce); assert.notEqual(nonce, previousNonce); previousNonce = nonce;
+    const policy = response.headers.get('content-security-policy')!;
+    assert.ok(policy.includes(`style-src 'self' 'nonce-${nonce}'`));
+    assert.doesNotMatch(policy, /unsafe-inline|unsafe-eval/);
+    assert.doesNotMatch(html, /__HOSO_STYLE_NONCE__/);
+    const assets = Array.from(html.matchAll(/(?:src|href)="(\/assets\/[^"]+)"/g), match => match[1]);
+    assert.ok(assets.some(path => path.endsWith('.js')));
+    assert.ok(assets.some(path => path.endsWith('.css')));
+    for (const asset of assets) {
+      const result = await f.request(asset); assert.equal(result.status, 200);
+      assert.match(result.headers.get('content-type')!, asset.endsWith('.js') ? /javascript/ : /css/);
+      assert.equal(result.headers.get('cache-control'), 'no-store');
+    }
+  }
+  for (const path of ['/.env', '/src/main.ts', '/assets/not-built.js', '/assets/main.js.map', '/app.js', '/toString']) {
+    assert.equal((await f.request(path)).status, 404, path);
+  }
 });
