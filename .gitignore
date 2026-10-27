@@ -11,3 +11,13 @@ node_modules/
 .env
 .env.*
 !.env.example
+
+# Reviewed project skills; keep other local agent tooling ignored.
+!/.agents/
+/.agents/*
+!/.agents/skills/
+/.agents/skills/*
+!/.agents/skills/codebase-design/
+!/.agents/skills/writing-for-agents/
+!/.agents/skills/MATT-POCOCK-LICENSE.txt
+!/.agents/skills/SOURCES.json

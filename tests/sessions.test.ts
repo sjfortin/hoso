@@ -64,7 +64,7 @@ process.stdin.on('data', chunk => {
   await assert.rejects(sessions.create('/tmp', 'arbitrary-command'), /Choose Codex/);
   const { session } = await sessions.exclusive(() => sessions.create('/tmp', 'codex'));
   assert.equal(session!.launcher, 'codex');
-  await until(async () => (await sessions.snapshot()).session!.output.includes('agent-ready flags:--no-alt-screen'));
+  await until(async () => (await sessions.snapshot()).session!.output.includes('agent-ready flags:--no-alt-screen --no-daemon'));
   const body = { sessionId: session!.id, requestId: 'agent-message-00000001', action: 'submit', text: 'hello agent' };
   await sessions.exclusive(() => sessions.action(body));
   await sessions.exclusive(() => sessions.action(body));

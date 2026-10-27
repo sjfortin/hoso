@@ -56,7 +56,7 @@ export class Sessions {
         try { await access(candidate, constants.X_OK); if ((await stat(candidate)).isFile()) { executable = candidate; break; } } catch { /* Try the next PATH entry. */ }
       }
       if (!executable) throw new SessionError('Codex is not installed or is not on Hoso’s PATH. Install and sign in to Codex on your computer, then restart Hoso.', 503);
-      command.push(executable, '--no-alt-screen');
+      command.push(executable, '--no-alt-screen', '--no-daemon');
     }
     this.directory ??= await mkdtemp(join(tmpdir(), 'hoso-'));
     const id = `hoso-${randomUUID()}`;

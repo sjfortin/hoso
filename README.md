@@ -1,6 +1,6 @@
 # Hoso
 
-Hoso is an easy terminal: create a session on your computer and continue from your phone through text, optional dictation, and simple controls. See the agreed [MVP direction](docs/mvp-direction.md) and [checkpoint / next session](docs/next-session.md).
+Hoso is an easy terminal: create a session on your computer and continue from your phone through text, optional dictation, and simple controls. See the agreed [MVP direction](docs/mvp-direction.md), [checkpoint / next session](docs/next-session.md), [project development skills](docs/skills.md), and [UI component assessment](docs/ui-components-assessment.md).
 
 The current developer prototype includes QR pairing, a shared desktop/phone terminal session, live plain-text output refreshed every second, and explicit input controls. A TypeScript/Node desktop service serves both interfaces. A private Hoso-managed tmux server runs the session; your existing tmux sessions are separate. There is no Hoso cloud backend or bundled AI provider.
 
@@ -14,7 +14,7 @@ The current developer prototype includes QR pairing, a shared desktop/phone term
 6. On supported browsers, **Dictate** adds a transcript to the composer for review. Browser speech recognition may send audio to its speech provider; Hoso requests confirmation before starting it. Keyboard dictation remains an alternative.
 7. **End session** stops its programs after confirmation. Disconnecting the phone leaves work running while Hoso and the computer remain running. Stopping Hoso ends the managed session; restart/reboot recovery is not implemented.
 
-Output is a plain-text snapshot at 100 columns, with up to the most recent 1,000 history lines plus the current screen. Color, cursor interaction, full terminal emulation, notifications, and agent-specific approval buttons are not implemented. Interactive programs can use the Enter, Escape, Tab, arrow, and Interrupt controls. Terminal programs run with your computer account's permissions; the selected folder is not a sandbox.
+Output is a plain-text snapshot at 100 columns, with up to the most recent 1,000 history lines plus the current screen. Color, cursor interaction, full terminal emulation, notifications, and agent-specific approval buttons are not implemented. Use **Confirm / Enter** to answer the highlighted setup or approval choice. **More controls** contains Escape, Tab, arrows, and End session; **Latest output** returns to the bottom after reading earlier output. Terminal programs run with your computer account's permissions; the selected folder is not a sandbox.
 
 ## Requirements
 
@@ -50,7 +50,7 @@ Open the **desktop setup link printed in the terminal**. Create a connection cod
 
 4. Open the desktop setup link from the terminal. Click **Create a connection code**.
 5. Scan the QR code with the phone camera. Enter a phone name and tap **Connect my phone** before the code expires.
-6. The phone shows **Home Computer · Online**. Send **Hello**. The reply is **Home Computer received your message.**
+6. The phone shows **Home Computer · Online** and the shared session. Start a Codex session if needed, answer any startup prompts, and send a task using **Send to Codex**.
 7. Optionally add Hoso to the phone's home screen using the browser's install/share menu. Install support varies by browser.
 
 Hoso stays bound to `127.0.0.1`; do not expose the Node port directly. Stop the service with Ctrl+C. Remove the private proxy when no longer needed using `tailscale serve --https=443 off` (check your existing Serve configuration first).
@@ -81,7 +81,15 @@ npm test
 
 Tests exercise real tmux session input, reconnection snapshots, duplicate suppression, interrupt/end controls, shared desktop/phone access, and the HTTP service: hello round trip, persisted credentials, expiring/single-use/superseded codes, concurrent pairing, revocation, rate limits, origin/host/authentication boundaries, secure cookie attributes, validation, and PWA assets.
 
-For the manual phone acceptance test, pair, send Hello, stop Hoso, and observe Offline within approximately 5–11 seconds. Restart with the same origin/state directory and verify recovery. Revoke access from desktop and confirm the phone returns to the pairing instructions. A sleeping computer cannot be distinguished reliably from other connectivity failures, so Phase 1 reports Offline.
+An opt-in integration check uses your installed, signed-in Codex and makes real model requests:
+
+```sh
+npm run acceptance
+```
+
+It starts an isolated Hoso service, pairs a test client, launches standalone Codex, accepts folder trust only for its own generated fixture, and verifies actual file creation, interrupt/redirection, revoked-client rejection, and re-pairing to the same Codex session. It waits beyond the interrupted command's original deadline to check that the command did not finish in the background. It never automatically accepts command-permission prompts. Generated projects and diagnostics stay in ignored `.relay/acceptance/`; Codex may save a normal trust entry for each fixture folder. This is a local HTTP client test, not a browser, phone, VPN, or microphone test.
+
+For manual phone acceptance, use a disposable project folder and complete a small file edit through Codex. Interrupt an active task and send a follow-up. Answer a real command approval prompt using the key controls. Lock/reopen the phone and check the same session; revoke/re-pair and repeat. Disconnect the computer and confirm Offline is shown and input is disabled. Normal companion shutdown ends the session, while phone authorization persists across restart. A sleeping computer cannot be distinguished reliably from other connectivity failures, so Hoso reports Offline.
 
 ## Prototype boundaries
 
@@ -91,4 +99,4 @@ The PWA does not cache terminal output or files. Terminal output is retained by 
 
 Linux is the first development target. Consumer installation, automatic startup/updates, keychain-backed storage, unattended network setup, and mobile cross-network acceptance are future work. See [architecture decisions](docs/architecture.md) for choices and unresolved questions.
 
-The Codex launcher uses `codex --no-alt-screen` to preserve scrollback, with no permission-bypass flags. See the [official CLI reference](https://learn.chatgpt.com/docs/cli/reference). A Codex session ends when Codex exits; it does not fall back to a shell that could execute later messages as commands.
+The Codex launcher uses `codex --no-alt-screen --no-daemon` to preserve scrollback and isolate the session from Codex’s shared command center, with no permission-bypass flags. See the [official CLI reference](https://learn.chatgpt.com/docs/cli/reference). A Codex session ends when Codex exits; it does not fall back to a shell that could execute later messages as commands.

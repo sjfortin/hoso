@@ -1,0 +1,28 @@
+{
+  "repository": "https://github.com/mattpocock/skills",
+  "commit": "59db609eb1e18aaf59b63284d0e52255aff0c63c",
+  "reviewed_at": "2026-10-27",
+  "license": "MIT",
+  "license_file": "MATT-POCOCK-LICENSE.txt",
+  "skills": [
+    {
+      "name": "codebase-design",
+      "upstream_path": "skills/engineering/codebase-design",
+      "files_sha256": {
+        "DEEPENING.md": "f3dd099ce99289bd213914d8ee3e2429b78309c3957ca4583f7659551b1d53c1",
+        "DESIGN-IT-TWICE.md": "52b52e75655a27aea59c6966b410bac82448968ad46ef1ebb9f07c274e3ae010",
+        "SKILL.md": "2c20617f87ec8af6a434859f381b2f061a69b530444e74eb39e78bb016a6d1e2",
+        "agents/openai.yaml": "edebc9e4fcfe102114012575eaa9600b9b5fd08c311664f389c36e7bc717740f"
+      }
+    },
+    {
+      "name": "writing-for-agents",
+      "upstream_path": "skills/productivity/writing-for-agents",
+      "files_sha256": {
+        "SKILL-MECHANICS.md": "c768e6307c7c10728c401c213f2c4ba71c542127eeb7ad2956aabd15a0fa0059",
+        "SKILL.md": "551adca942227b44192edba88acd4e8db911f0121ce58ad16944ccf6a896a74a",
+        "agents/openai.yaml": "eacb24b2a618cfb81dacb0416f4fdd75ddf3a8060f8ddb99aae1b1e301907e4b"
+      }
+    }
+  ]
+}

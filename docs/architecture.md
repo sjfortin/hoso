@@ -76,3 +76,12 @@ Codex sessions have a Send to Codex action that sends literal input followed by 
 Tests use a local deterministic agent stand-in to verify executable launch, startup arguments, message submission, and duplicate suppression without model calls. A separate startup smoke check verified the installed Codex process starts inside a Hoso session. A complete real-agent task still requires phone acceptance.
 
 The submission fix was also checked with a harmless real Codex prompt that requested a fixed reply and prohibited tool use or file changes. The deterministic agent test emulates a TUI that interprets Enter during a paste burst as a newline.
+
+
+## 007 — Standalone Codex and opt-in acceptance (2026-10-27)
+
+The real task check exposed shared-daemon command-center behavior, so Hoso now adds `--no-daemon` to isolate its Codex process. Sign-in, folder trust, sandbox policy, and command approvals remain Codex responsibilities; Hoso does not bypass them. Folder-trust prompts must be answered with explicit key input before treating the interface as an agent task composer.
+
+The opt-in `npm run acceptance` starts an isolated service and uses the same admin/pair/device HTTP protocol as the clients. It checks real file edits, interrupt/redirection, credential revocation, re-pairing, and lack of a late completion marker after an interrupted command's deadline. It accepts folder trust only for its own generated inert project. It does not automatically answer command-permission prompts. Tests use the installed CLI/account, so they are separate from the deterministic regression suite and keep local diagnostics in ignored state storage.
+
+The interface groups secondary key controls and provides explicit delivery acknowledgements. No busy/completed/approval state is inferred from output. Browser layout, microphone behavior, screen lock, and mobile approval handling remain real-device acceptance items.

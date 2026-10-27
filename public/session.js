@@ -10,7 +10,7 @@
     if (!Recognition) el('session-dictate').disabled = true;
     if (session?.state === 'exited') {
       el('session-insert').disabled = true;
-      for (const button of el('session-keys').querySelectorAll('button')) if (button.dataset.key !== 'end') button.disabled = true;
+      for (const button of el('session-keys').querySelectorAll('button[data-key]')) if (button.dataset.key !== 'end') button.disabled = true;
     }
   };
   async function request(body) {
@@ -34,7 +34,7 @@
     if (session) {
       el('session-folder-label').textContent = session.folder;
       const agent = session.launcher === 'codex';
-      el('session-mode-note').textContent = agent ? 'Codex session. Answer any startup or approval prompts shown below before giving it a task.' : 'Plain terminal: no agent is started. Text goes to a shell.';
+      el('session-mode-note').textContent = agent ? 'Codex is open in this folder. Answer setup or approval prompts with the controls below.' : 'Plain terminal: no agent is started. Text goes to a shell.';
       el('session-insert').textContent = agent ? 'Send to Codex' : 'Insert text';
       el('session-input-note').textContent = agent ? 'Send types your message and presses Enter. It goes directly to Codex; check its prompt before sending. Nothing is queued or automatically resent.' : 'Insert text types into the shell. Press Enter separately to execute. Input is never automatically resent.';
       const output = el('session-output');
@@ -56,9 +56,14 @@
   }
   async function mutate(body) {
     if (busy || !online || recognizing) return false;
-    busy = true; controls(); el('session-error').textContent = '';
-    try { await request(body); return true; }
+    busy = true; controls(); el('session-error').textContent = ''; el('session-delivery').textContent = 'Sending…';
+    try {
+      await request(body);
+      el('session-delivery').textContent = body.action === 'create' ? 'Session started.' : body.action === 'end' ? 'Session ended.' : body.action === 'submit' ? 'Message sent to Codex. Watch the output for its response.' : body.action === 'interrupt' ? 'Interrupt sent. Check the output before sending a follow-up.' : 'Input sent.';
+      return true;
+    }
     catch (error) {
+      el('session-delivery').textContent = '';
       el('session-error').textContent = error.status ? error.message : 'Delivery could not be confirmed. Check the output before sending anything else. Hoso will not resend it.';
       return false;
     } finally { busy = false; controls(); void refresh(); }
@@ -73,6 +78,7 @@
     if (/[\x00-\x1f\x7f-\x9f]/.test(text)) { el('session-error').textContent = 'Insert one line at a time. Use Enter separately.'; return; }
     if (await mutate({ action: session.launcher === 'codex' ? 'submit' : 'text', text, sessionId: session.id, requestId: crypto.randomUUID() })) el('session-text').value = '';
   });
+  el('session-latest').addEventListener('click', () => { const output = el('session-output'); output.scrollTop = output.scrollHeight; output.focus({ preventScroll: true }); });
   el('session-keys').addEventListener('click', async event => {
     const action = event.target.closest('button')?.dataset.key;
     if (!action || !session) return;
