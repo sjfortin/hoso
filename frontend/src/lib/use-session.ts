@@ -2,7 +2,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { api, message, RequestError, sessionEndpoint } from './api';
 
 export interface Session {
-  id: string; folder: string; startedAt: string; launcher: 'shell' | 'codex';
+  id: string; folder: string; startedAt: string; launcher: 'shell' | 'codex' | 'codex-agent';
+  agent?: { activity: string; turnId: string | null; approvals: { id: string; turnId: string; title: string; details: string; canApprove: boolean }[] };
   state: 'running' | 'exited'; program: string; output: string; retention: string;
 }
 export function useSession(active: boolean, onRevoked: () => void) {
@@ -43,15 +44,15 @@ export function useSession(active: boolean, onRevoked: () => void) {
     window.addEventListener('online', refresh); window.addEventListener('offline', offline);
     return () => { mounted.current = false; epoch.current++; clearInterval(timer); document.removeEventListener('visibilitychange', visible); window.removeEventListener('online', refresh); window.removeEventListener('offline', offline); };
   }, [active, refresh]);
-  const run = async (action: string, options: { text?: string; folder?: string; launcher?: string; sessionId?: string } = {}) => {
+  const run = async (action: string, options: { text?: string; folder?: string; launcher?: string; sessionId?: string; turnId?: string; approvalId?: string; decision?: string } = {}) => {
     if (!active || !online || sending.current) return false;
     sending.current = true; const version = ++epoch.current;
     setBusy(true); setError(''); setDelivery('Sending…');
     try {
-      const body = action === 'create' ? { action, folder: options.folder ?? '', launcher: options.launcher ?? 'codex' } : { action, sessionId: options.sessionId ?? session?.id, requestId: crypto.randomUUID(), ...(options.text === undefined ? {} : { text: options.text }) };
+      const body = action === 'create' ? { action, folder: options.folder ?? '', launcher: options.launcher ?? 'codex' } : { action, sessionId: options.sessionId ?? session?.id, requestId: crypto.randomUUID(), ...(options.turnId ? { turnId: options.turnId } : {}), ...(options.approvalId ? { approvalId: options.approvalId, decision: options.decision } : {}), ...(options.text === undefined ? {} : { text: options.text }) };
       await api(sessionEndpoint, body);
       if (!mounted.current || epoch.current !== version) return false;
-      setDelivery(action === 'create' ? 'Session started.' : action === 'end' ? 'Session ended.' : action === 'submit' ? 'Message sent to Codex.' : action === 'interrupt' ? 'Interrupt sent. Check the output before continuing.' : 'Input sent.');
+      setDelivery(action === 'create' ? 'Session started.' : action === 'end' ? 'Session ended.' : action === 'approval' ? 'Decision sent to Codex.' : action === 'steer' ? 'Guidance sent to the active turn.' : action === 'submit' ? 'Message sent to Codex.' : action === 'interrupt' ? 'Interrupt sent. Check the output before continuing.' : 'Input sent.');
       return true;
     } catch (failure) {
       if (!mounted.current || epoch.current !== version) return false;

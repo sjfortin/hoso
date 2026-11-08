@@ -1,13 +1,14 @@
 import { StrictMode } from 'react';
 import { render, screen, waitFor, within, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import type { Session } from '../src/lib/use-session';
 import { describe, it, expect, vi } from 'vitest';
 
-const fixture = { id: 'session-one', folder: '/work/example', startedAt: '2026-10-27', launcher: 'codex', state: 'running', program: 'codex', output: 'Private terminal output', retention: 'Recent output' };
+const fixture: Session = { id: 'session-one', folder: '/work/example', startedAt: '2026-10-27', launcher: 'codex', state: 'running', program: 'codex', output: 'Private terminal output', retention: 'Recent output' };
 async function boot({ phone = false, pair = false, failure = false } = {}) {
   vi.resetModules();
   history.replaceState(null, '', phone ? pair ? '/#pair=fixture-pair-token' : '/' : '/desktop#admin=fixture-admin-token');
-  let session: typeof fixture | null = { ...fixture };
+  let session: Session | null = { ...fixture };
   let authorized = !pair;
   let failInput = failure;
   let delayed: Promise<Response> | null = null;
@@ -33,10 +34,30 @@ async function boot({ phone = false, pair = false, failure = false } = {}) {
   vi.stubGlobal('fetch', fetchMock);
   const { App } = await import('../src/app');
   render(<StrictMode><App /></StrictMode>);
-  return { posts, fetchMock, setAuthorized: (value: boolean) => { authorized = value; }, setSession: (value: typeof fixture) => { session = value; }, setStatusDelay: (value: Promise<Response>) => { pendingStatus = value; }, setInputDelay: (value: Promise<Response>) => { pendingInput = value; }, setDelay: (value: Promise<Response>) => { delayed = value; }, setFailure: (value: boolean) => { failInput = value; }, response };
+  return { posts, fetchMock, setAuthorized: (value: boolean) => { authorized = value; }, setSession: (value: Session) => { session = value; }, setStatusDelay: (value: Promise<Response>) => { pendingStatus = value; }, setInputDelay: (value: Promise<Response>) => { pendingInput = value; }, setDelay: (value: Promise<Response>) => { delayed = value; }, setFailure: (value: boolean) => { failInput = value; }, response };
 }
 
 describe('shared frontend workflows', () => {
+  it('targets explicit steering and approval actions and disables terminal keys in agent mode', async () => {
+    const app = await boot({ phone: true }); const user = userEvent.setup();
+    await screen.findByText('Private terminal output');
+    app.setSession({ ...fixture, launcher: 'codex-agent', state: 'running', agent: { activity: 'Working', turnId: 'turn-one', approvals: [{ id: 'approval-one', turnId: 'turn-one', title: 'Review command', details: 'echo example', canApprove: true }] } });
+    await act(async () => { window.dispatchEvent(new Event('online')); });
+    await screen.findByRole('heading', { name: 'Review command' });
+    expect(app.posts).toHaveLength(0);
+    expect(screen.queryByRole('button', { name: 'Confirm / Enter' })).not.toBeInTheDocument();
+    await user.type(screen.getByRole('textbox', { name: 'Message Codex' }), 'change direction');
+    expect(screen.getByRole('button', { name: 'Send to Codex' })).toBeDisabled();
+    await user.click(screen.getByRole('button', { name: 'Steer work' }));
+    await waitFor(() => expect(app.posts[0]?.body).toMatchObject({ action: 'steer', turnId: 'turn-one', text: 'change direction' }));
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Approve once' })).toBeEnabled());
+    await user.click(screen.getByRole('button', { name: 'Approve once' }));
+    await waitFor(() => expect(app.posts[1]?.body).toMatchObject({ action: 'approval', approvalId: 'approval-one', decision: 'accept' }));
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Interrupt' })).toBeEnabled());
+    await user.click(screen.getByRole('button', { name: 'Interrupt' }));
+    await waitFor(() => expect(app.posts[2]?.body).toMatchObject({ action: 'interrupt', turnId: 'turn-one' }));
+  });
+
   it('consumes a QR fragment once under StrictMode and pairs without effect-driven POSTs', async () => {
     const app = await boot({ phone: true, pair: true }); const user = userEvent.setup();
     expect(location.hash).toBe('');

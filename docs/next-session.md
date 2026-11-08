@@ -1,5 +1,12 @@
 # Next working session
 
+## Current checkpoint — 2026-11-08
+
+The user confirmed the earlier real-phone acceptance phase passed and requested richer agent controls. Added an optional **Codex with agent controls (preview)** launcher backed by the local stdio app-server protocol. It exposes authoritative turn activity, explicit steering/interrupt, and one-time command/file approval responses. The existing default Codex terminal and plain shell remain available. See [agent controls](agent-controls.md) for scope and next acceptance checks.
+
+The older phone-acceptance tasks below describe the previous checkpoint, not blockers for beginning this phase. The new preview needs its own phone acceptance.
+
+
 Checkpoint: 2026-10-27 — real Codex file editing, interruption/redirection, and revocation/re-pairing verified through the Hoso HTTP protocol.
 
 ## Product direction

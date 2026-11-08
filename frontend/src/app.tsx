@@ -51,7 +51,8 @@ function Workspace({ onRevoked }: { onRevoked: () => void }) {
   const speech = useDictation(online && !busy && session?.state === 'running', text => setDraft(current => [current, text].filter(Boolean).join(' ').slice(0, 2000)));
   const disabled = !online || busy || speech.listening;
   const exited = session?.state === 'exited';
-  const agent = session?.launcher === 'codex';
+  const structured = session?.launcher === 'codex-agent';
+  const agent = session?.launcher === 'codex' || structured;
   useEffect(() => {
     const query = matchMedia('(min-width: 768px)'); const update = () => setWide(query.matches);
     query.addEventListener('change', update); return () => query.removeEventListener('change', update);
@@ -60,37 +61,44 @@ function Workspace({ onRevoked }: { onRevoked: () => void }) {
     if (previousSession.current !== session?.id) { following.current = true; previousSession.current = session?.id; setTools(false); setDraft(''); }
     if (following.current && output.current) output.current.scrollTop = output.current.scrollHeight;
   }, [session?.output, session?.id]);
-  const submit = async () => {
+  const submit = async (steer = false) => {
     if (!draft.trim() || disabled || exited) return;
     if (/[\x00-\x1f\x7f-\x9f]/.test(draft)) { setError('Send one line at a time. Use Confirm / Enter separately for terminal prompts.'); return; }
     const text = draft;
-    if (await run(agent ? 'submit' : 'text', { text })) setDraft(current => current === text ? '' : current);
+    if (structured && session?.agent?.turnId && !steer) { setError('Codex is working. Choose Steer work to redirect this turn.'); return; }
+    if (await run(steer ? 'steer' : agent ? 'submit' : 'text', { text, turnId: session?.agent?.turnId ?? undefined })) setDraft(current => current === text ? '' : current);
   };
-  const key = async (action: string) => { await run(action); };
+  const key = async (action: string) => { await run(action, { turnId: session?.agent?.turnId ?? undefined }); };
   return <section className="workspace" aria-label="Workspace">
     <div className="workspace-heading"><div><p className="eyebrow">YOUR WORKSPACE</p><h1>{session ? agent ? 'A little closer to your work.' : 'Your terminal, with you.' : 'Start something.'}</h1></div>
-      <div role="status"><Badge online={online}>{!online ? 'Reconnecting' : exited ? 'Program exited' : session ? 'Connected' : 'Ready'}</Badge></div>
+      <div role="status"><Badge online={online}>{!online ? 'Reconnecting' : exited ? 'Program exited' : session ? session.agent?.activity ?? 'Connected' : 'Ready'}</Badge></div>
     </div>
     {!session ? <form className="setup-form panel" onSubmit={async event => { event.preventDefault(); await run('create', { folder: folder.trim(), launcher }); }}>
       <div className="setup-icon"><SquareTerminal aria-hidden="true" /></div><h2>Where shall we begin?</h2><p className="muted">Start a session on your computer. Pick it up here, or on your phone.</p>
-      <label htmlFor="launcher">Start with</label><div className="select-wrapper"><select id="launcher" value={launcher} onChange={e => setLauncher(e.target.value)} disabled={disabled}><option value="codex">Codex agent</option><option value="shell">Plain terminal</option></select><ChevronDown aria-hidden="true" /></div>
+      <label htmlFor="launcher">Start with</label><div className="select-wrapper"><select id="launcher" value={launcher} onChange={e => setLauncher(e.target.value)} disabled={disabled}><option value="codex">Codex agent</option><option value="codex-agent">Codex with agent controls (preview)</option><option value="shell">Plain terminal</option></select><ChevronDown aria-hidden="true" /></div>
       <label htmlFor="folder">Working folder on your computer</label><Input id="folder" value={folder} onChange={e => setFolder(e.target.value)} placeholder="Leave empty for your home folder" disabled={disabled} autoComplete="off" aria-describedby="folder-help" />
-      <p className="help" id="folder-help">{launcher === 'codex' ? 'Uses Codex installed on your computer, with its existing sign-in and permission settings.' : 'Starts a shell. No agent is launched in this mode.'} The working folder is not a sandbox.</p>
+      <p className="help" id="folder-help">{launcher !== 'shell' ? 'Uses Codex installed on your computer, with its existing sign-in and permission settings.' : 'Starts a shell. No agent is launched in this mode.'} The working folder is not a sandbox.</p>
       <Button type="submit" disabled={disabled}>{busy ? <LoaderCircle className="animate-spin" /> : <ArrowUpRight />}Start session</Button>
     </form> : <>
       <div className="session-meta"><span className="folder-path"><FolderOpen aria-hidden="true" />{session.folder}</span><span>{agent ? 'Codex' : 'Plain terminal'}</span></div>
       <div className="activity-panel"><div className="activity-heading"><span><SquareTerminal aria-hidden="true" />Live output</span><Button type="button" variant="ghost" className="latest-button" onClick={() => { following.current = true; output.current?.scrollTo({ top: output.current.scrollHeight }); output.current?.focus({ preventScroll: true }); }}><ArrowDownToLine aria-hidden="true" />Latest</Button></div>
         <pre ref={output} className="terminal-output" tabIndex={0} aria-label="Terminal output" onScroll={() => { const el = output.current!; following.current = el.scrollHeight - el.scrollTop - el.clientHeight < 40; }}>{session.output}</pre>
-        <div className="activity-footer"><span>Recent output · 100 columns</span><span>{exited ? 'Program exited' : session.program}</span></div>
+        <div className="activity-footer"><span>{structured ? 'Recent agent activity' : 'Recent output · 100 columns'}</span><span>{exited ? 'Program exited' : session.program}</span></div>
       </div>
-      <div className="primary-controls"><Button type="button" variant="secondary" disabled={disabled || exited} onClick={() => void key('interrupt')}><CircleStop aria-hidden="true" />Interrupt</Button>
-        <Button type="button" variant="outline" disabled={disabled || exited} onClick={() => void key('enter')}><CornerDownLeft aria-hidden="true" />Confirm / Enter</Button>
+      {structured && session.agent?.approvals.map(approval => <section className="panel approval-card" key={approval.id} aria-label={approval.title}>
+        <h2>{approval.title}</h2><pre className="terminal-output" tabIndex={0}>{approval.details}</pre>
+        {!approval.canApprove && <p className="help">This request cannot be fully supported here. Decline it and use terminal mode.</p>}
+        <div className="primary-controls"><Button type="button" variant="secondary" disabled={disabled || exited} onClick={() => void run('approval', { approvalId: approval.id, decision: 'decline' })}>Decline</Button>
+        <Button type="button" disabled={disabled || exited || !approval.canApprove} onClick={() => void run('approval', { approvalId: approval.id, decision: 'accept' })}>Approve once</Button></div>
+      </section>)}
+      <div className="primary-controls"><Button type="button" variant="secondary" disabled={disabled || exited || (structured && !session.agent?.turnId)} onClick={() => void key('interrupt')}><CircleStop aria-hidden="true" />Interrupt</Button>
+        {!structured && <Button type="button" variant="outline" disabled={disabled || exited} onClick={() => void key('enter')}><CornerDownLeft aria-hidden="true" />Confirm / Enter</Button>}
         <Sheet open={tools} onOpenChange={setTools}>
           <SheetTrigger render={<Button type="button" variant="ghost" className="tools-trigger" aria-label="More controls" />}><Keyboard aria-hidden="true" /><span>More controls</span></SheetTrigger>
           <SheetContent side={wide ? 'right' : 'bottom'} className="controls-sheet">
-            <SheetHeader><SheetTitle>Session controls</SheetTitle><SheetDescription>Use these keys to answer setup and approval prompts shown in the output. Opening this panel never sends a key.</SheetDescription></SheetHeader>
-            <div className="sheet-body"><p className="eyebrow">KEYBOARD</p><div className="key-grid">{([['escape', 'Esc / Back'], ['tab', 'Tab'], ['up', '↑ Up'], ['down', '↓ Down'], ['enter', 'Confirm / Enter']] as const).map(([action, label]) => <Button type="button" key={action} variant="outline" disabled={disabled || exited} onClick={() => void key(action)}>{label}</Button>)}</div>
-              <p className="help">Confirm / Enter selects the highlighted choice. Only approve an action you intend to allow. These controls go directly to the current program.</p>
+            <SheetHeader><SheetTitle>Session controls</SheetTitle><SheetDescription>{structured ? 'Manage this agent session. Closing your phone leaves work running.' : 'Use these keys to answer setup and approval prompts shown in the output. Opening this panel never sends a key.'}</SheetDescription></SheetHeader>
+            <div className="sheet-body">{!structured && <><p className="eyebrow">KEYBOARD</p><div className="key-grid">{([['escape', 'Esc / Back'], ['tab', 'Tab'], ['up', '↑ Up'], ['down', '↓ Down'], ['enter', 'Confirm / Enter']] as const).map(([action, label]) => <Button type="button" key={action} variant="outline" disabled={disabled || exited || structured} onClick={() => void key(action)}>{label}</Button>)}</div>
+              <p className="help">Confirm / Enter selects the highlighted choice. Only approve an action you intend to allow. These controls go directly to the current program.</p></>}
               <div className="end-session"><h3>Finished for now?</h3><p className="help">Closing your phone leaves work running. Ending the session stops its programs.</p>
                 <Confirm key={session.id} trigger="End session" title="End this session?" description={`Stop the programs running in ${session.folder}. This cannot be undone.`} action="End session" destructive disabled={disabled} onConfirm={() => run('end', { sessionId: session.id })} />
               </div>
@@ -98,13 +106,14 @@ function Workspace({ onRevoked }: { onRevoked: () => void }) {
           </SheetContent>
         </Sheet>
       </div>
-      <p className="help prompt-help">{exited ? 'The program has exited. You can read its output or end this session to start another.' : agent ? 'Answer any setup or approval prompts above before giving Codex a task.' : 'Plain terminal: text goes to a shell. Use Confirm / Enter to execute it.'}</p>
-      <form className={`message-composer ${speech.listening ? 'is-listening' : ''}`} onSubmit={event => { event.preventDefault(); void submit(); }}>
+      <p className="help prompt-help">{structured && !exited ? 'Review requests below before approving. Some prompts need a terminal session.' : exited ? 'The program has exited. You can read its output or end this session to start another.' : agent ? 'Answer any setup or approval prompts above before giving Codex a task.' : 'Plain terminal: text goes to a shell. Use Confirm / Enter to execute it.'}</p>
+      <form className={`message-composer ${structured ? 'agent-controls' : ''} ${speech.listening ? 'is-listening' : ''}`} onSubmit={event => { event.preventDefault(); void submit(); }}>
         <label htmlFor="message" className="sr-only">{agent ? 'Message Codex' : 'Terminal text'}</label>
         <Textarea id="message" value={draft} onChange={event => setDraft(event.target.value)} disabled={disabled || exited} placeholder={agent ? 'What would you like to work on?' : 'Type text or a command…'} rows={3} maxLength={2000} aria-describedby="input-note" onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); void submit(); } }} />
         <div className="composer-actions">{speech.listening ? <Button type="button" variant="secondary" onClick={speech.stop}><CircleStop aria-hidden="true" />Stop dictation</Button> : <Confirm trigger={<><Mic aria-hidden="true" />Dictate</>} title="Use browser dictation?" description="Your browser may send microphone audio to its speech provider. Dictation adds text here for review; it will not be sent until you choose Send." action="Start dictation" disabled={disabled || exited || !speech.supported} onConfirm={speech.start} />}
           <span className="composer-hint">{draft.length ? `${draft.length}/2000` : 'Text or voice. Your computer.'}</span>
-          <Button type="submit" disabled={disabled || exited || !draft.trim()} aria-label={agent ? 'Send to Codex' : 'Insert text'}>{busy ? <LoaderCircle className="animate-spin" aria-hidden="true" /> : <ArrowUp aria-hidden="true" />}<span>{agent ? 'Send' : 'Insert text'}</span></Button>
+          {structured && session.agent?.turnId && <Button type="button" disabled={disabled || exited || !draft.trim()} onClick={() => void submit(true)}>Steer work</Button>}
+          <Button type="submit" disabled={disabled || exited || !draft.trim() || (structured && !!session.agent?.turnId)} aria-label={agent ? 'Send to Codex' : 'Insert text'}>{busy ? <LoaderCircle className="animate-spin" aria-hidden="true" /> : <ArrowUp aria-hidden="true" />}<span>{agent ? 'Send' : 'Insert text'}</span></Button>
         </div>
       </form>
       <p className="help" id="input-note">{agent ? 'Send submits to Codex. Input is never queued or automatically resent.' : 'Insert text types into the terminal. Confirm / Enter is separate.'}</p>

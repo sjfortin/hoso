@@ -6,17 +6,18 @@ import { join, isAbsolute, delimiter, resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { constants } from 'node:fs';
 
+import { SessionError } from './session-error.ts';
+export { SessionError } from './session-error.ts';
+import { CodexAgent } from './codex-agent.ts';
+
 const exec = promisify(execFile);
-export class SessionError extends Error {
-  status: number;
-  constructor(message: string, status = 400) { super(message); this.status = status; }
-}
 const keys: Record<string, string> = { enter: 'Enter', interrupt: 'C-c', escape: 'Escape', tab: 'Tab', up: 'Up', down: 'Down' };
-type Session = { id: string; folder: string; startedAt: string; launcher: 'shell' | 'codex' };
+type Session = { id: string; folder: string; startedAt: string; launcher: 'shell' | 'codex' | 'codex-agent' };
 
 // A private tmux server: never discover, attach to, or kill the user's existing sessions.
 export class Sessions {
   private directory?: string;
+  private agent?: CodexAgent;
   private session?: Session;
   private queue = Promise.resolve();
   private receipts = new Map<string, string>();
@@ -36,6 +37,7 @@ export class Sessions {
   }
   async snapshot() {
     if (!this.session) return { session: null };
+    if (this.agent) return { session: { ...this.session, ...this.agent.snapshot() } };
     const target = `=${this.session.id}:0.0`;
     const info = (await this.tmux('display-message', '-p', '-t', target, '#{pane_dead}\t#{pane_current_command}')).trim().split('\t');
     const output = await this.tmux('capture-pane', '-p', '-J', '-S', '-1000', '-t', target);
@@ -47,15 +49,21 @@ export class Sessions {
     let path: string;
     try { path = await realpath(folder || homedir()); if (!(await stat(path)).isDirectory()) throw Error(); }
     catch { throw new SessionError('That folder is not available on your computer.'); }
-    if (launcher !== 'shell' && launcher !== 'codex') throw new SessionError('Choose Codex or Plain terminal.');
+    if (launcher !== 'shell' && launcher !== 'codex' && launcher !== 'codex-agent') throw new SessionError('Choose Codex or Plain terminal.');
     const command: string[] = [];
-    if (launcher === 'codex') {
+    if (launcher === 'codex' || launcher === 'codex-agent') {
       let executable: string | undefined;
       for (const entry of (process.env.PATH ?? '').split(delimiter)) {
         const candidate = resolve(entry, 'codex');
         try { await access(candidate, constants.X_OK); if ((await stat(candidate)).isFile()) { executable = candidate; break; } } catch { /* Try the next PATH entry. */ }
       }
       if (!executable) throw new SessionError('Codex is not installed or is not on Hoso’s PATH. Install and sign in to Codex on your computer, then restart Hoso.', 503);
+      if (launcher === 'codex-agent') {
+        this.agent = await CodexAgent.create(executable, path);
+        this.session = { id: `hoso-${randomUUID()}`, folder: path, startedAt: new Date().toISOString(), launcher };
+        this.receipts.clear();
+        return this.snapshot();
+      }
       command.push(executable, '--no-alt-screen', '--no-daemon');
     }
     this.directory ??= await mkdtemp(join(tmpdir(), 'hoso-'));
@@ -69,18 +77,25 @@ export class Sessions {
   async action(body: Record<string, unknown>) {
     if (!this.session || body.sessionId !== this.session.id) throw new SessionError('This session changed. Refresh before sending input.', 409);
     if (typeof body.requestId !== 'string' || !/^[a-zA-Z0-9-]{16,80}$/.test(body.requestId)) throw new SessionError('A unique input identifier is required.');
-    const signature = JSON.stringify([body.sessionId, body.action, body.text]);
+    const signature = JSON.stringify([body.sessionId, body.action, body.text, body.turnId, body.approvalId, body.decision]);
     if (this.receipts.has(body.requestId)) {
       if (this.receipts.get(body.requestId) !== signature) throw new SessionError('This input identifier has already been used.', 409);
       return { ok: true, duplicate: true };
     }
     if (this.receipts.size >= 10000) throw new SessionError('This session reached its input limit. Start a new session.', 409);
     const target = `=${this.session.id}:0.0`;
-    if (body.action === 'text' || body.action === 'submit') {
+    if (body.action === 'text' || body.action === 'submit' || body.action === 'steer') {
       // Text cannot contain terminal control characters or implicit Enter presses.
       if (typeof body.text !== 'string' || !body.text.trim() || body.text.length > 2000 || /[\x00-\x1f\x7f-\x9f]/.test(body.text)) throw new SessionError('Send one line of up to 2,000 characters. Use Enter separately.');
-    } else if (body.action !== 'end' && !(typeof body.action === 'string' && Object.hasOwn(keys, body.action))) throw new SessionError('That control is not available.');
-    if (body.action === 'submit' && this.session.launcher !== 'codex') throw new SessionError('Use Insert text and Enter separately in a plain terminal.');
+    } else if (body.action !== 'end' && !(this.agent && ['steer', 'approval'].includes(String(body.action))) && !(typeof body.action === 'string' && Object.hasOwn(keys, body.action))) throw new SessionError('That control is not available.');
+    if (body.action === 'steer' && !this.agent) throw new SessionError('Steering requires agent controls.');
+    if (body.action === 'submit' && this.session.launcher === 'shell') throw new SessionError('Use Insert text and Enter separately in a plain terminal.');
+    if (this.agent) {
+      this.receipts.set(body.requestId, signature);
+      if (body.action === 'end') { this.agent.close(); this.agent = undefined; this.session = undefined; }
+      else await this.agent.action(body);
+      return { ok: true };
+    }
     const dead = (await this.tmux('display-message', '-p', '-t', target, '#{pane_dead}')).trim() === '1';
     if (dead && body.action !== 'end') throw new SessionError('The program has exited. End this session and start a new one.', 409);
     // Record before attempting delivery. An uncertain operation must never be replayed.
@@ -103,6 +118,7 @@ export class Sessions {
   }
   async close() {
     await this.exclusive(async () => {
+      this.agent?.close(); this.agent = undefined; this.session = undefined;
       if (!this.directory) return;
       try { await this.tmux('kill-server'); } catch { /* It may already have exited. */ }
       await rm(this.directory, { recursive: true, force: true });
