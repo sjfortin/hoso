@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
-import { ArrowDownToLine, ArrowUp, ArrowUpRight, Check, ChevronDown, CircleStop, CornerDownLeft, FolderOpen, Keyboard, LoaderCircle, Mic, Monitor, ShieldCheck, Smartphone, SquareTerminal, Unplug } from 'lucide-react';
+import { ArrowDownToLine, ArrowUp, ArrowUpRight, Check, ChevronDown, CircleStop, CornerDownLeft, FolderOpen, Keyboard, LoaderCircle, Mic, Monitor, ShieldCheck, Smartphone, SquareTerminal, Unplug, WrapText, X, History } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -44,6 +44,9 @@ function Workspace({ onRevoked }: { onRevoked: () => void }) {
   const [launcher, setLauncher] = useState('codex');
   const [draft, setDraft] = useState('');
   const [tools, setTools] = useState(false);
+  const [wrapOutput, setWrapOutput] = useState(false);
+  const [recent, setRecent] = useState<string[]>([]);
+  const [showRecent, setShowRecent] = useState(false);
   const [wide, setWide] = useState(() => matchMedia('(min-width: 768px)').matches);
   const output = useRef<HTMLPreElement>(null);
   const following = useRef(true);
@@ -58,7 +61,7 @@ function Workspace({ onRevoked }: { onRevoked: () => void }) {
     query.addEventListener('change', update); return () => query.removeEventListener('change', update);
   }, []);
   useLayoutEffect(() => {
-    if (previousSession.current !== session?.id) { following.current = true; previousSession.current = session?.id; setTools(false); setDraft(''); }
+    if (previousSession.current !== session?.id) { following.current = true; previousSession.current = session?.id; setTools(false); setDraft(''); setRecent([]); setShowRecent(false); }
     if (following.current && output.current) output.current.scrollTop = output.current.scrollHeight;
   }, [session?.output, session?.id]);
   const submit = async (steer = false) => {
@@ -66,11 +69,15 @@ function Workspace({ onRevoked }: { onRevoked: () => void }) {
     if (/[\x00-\x1f\x7f-\x9f]/.test(draft)) { setError('Send one line at a time. Use Confirm / Enter separately for terminal prompts.'); return; }
     const text = draft;
     if (structured && session?.agent?.turnId && !steer) { setError('Codex is working. Choose Steer work to redirect this turn.'); return; }
-    if (await run(steer ? 'steer' : agent ? 'submit' : 'text', { text, turnId: session?.agent?.turnId ?? undefined })) setDraft(current => current === text ? '' : current);
+    if (await run(steer ? 'steer' : agent ? 'submit' : 'text', { text, turnId: session?.agent?.turnId ?? undefined })) {
+      setRecent(current => [text, ...current.filter(item => item !== text)].slice(0, 8));
+      setDraft(current => current === text ? '' : current);
+      setShowRecent(false);
+    }
   };
   const key = async (action: string) => { await run(action, { turnId: session?.agent?.turnId ?? undefined }); };
   return <section className="workspace" aria-label="Workspace">
-    <div className="workspace-heading"><div><p className="eyebrow">YOUR WORKSPACE</p><h1>{session ? agent ? 'A little closer to your work.' : 'Your terminal, with you.' : 'Start something.'}</h1></div>
+    <div className="workspace-heading"><div><p className="eyebrow">YOUR WORKSPACE</p><h1>{session ? agent ? 'Work with Codex' : 'Your terminal' : 'Start a workspace'}</h1></div>
       <div role="status"><Badge online={online}>{!online ? 'Reconnecting' : exited ? 'Program exited' : session ? session.agent?.activity ?? 'Connected' : 'Ready'}</Badge></div>
     </div>
     {!session ? <form className="setup-form panel" onSubmit={async event => { event.preventDefault(); await run('create', { folder: folder.trim(), launcher }); }}>
@@ -81,8 +88,8 @@ function Workspace({ onRevoked }: { onRevoked: () => void }) {
       <Button type="submit" disabled={disabled}>{busy ? <LoaderCircle className="animate-spin" /> : <ArrowUpRight />}Start session</Button>
     </form> : <>
       <div className="session-meta"><span className="folder-path"><FolderOpen aria-hidden="true" />{session.folder}</span><span>{agent ? 'Codex' : 'Plain terminal'}</span></div>
-      <div className="activity-panel"><div className="activity-heading"><span><SquareTerminal aria-hidden="true" />Live output</span><Button type="button" variant="ghost" className="latest-button" onClick={() => { following.current = true; output.current?.scrollTo({ top: output.current.scrollHeight }); output.current?.focus({ preventScroll: true }); }}><ArrowDownToLine aria-hidden="true" />Latest</Button></div>
-        <pre ref={output} className="terminal-output" tabIndex={0} aria-label="Terminal output" onScroll={() => { const el = output.current!; following.current = el.scrollHeight - el.scrollTop - el.clientHeight < 40; }}>{session.output}</pre>
+      <div className="activity-panel"><div className="activity-heading"><span><SquareTerminal aria-hidden="true" />{structured ? 'Agent activity' : 'Live output'}</span><div className="output-actions"><Button type="button" variant="ghost" className="latest-button" aria-label="Wrap output" aria-pressed={wrapOutput} onClick={() => setWrapOutput(value => !value)}><WrapText aria-hidden="true" /><span>Wrap</span></Button><Button type="button" variant="ghost" className="latest-button" onClick={() => { following.current = true; output.current?.scrollTo({ top: output.current.scrollHeight }); output.current?.focus({ preventScroll: true }); }}><ArrowDownToLine aria-hidden="true" />Latest</Button></div></div>
+        <pre ref={output} className={`terminal-output ${wrapOutput ? 'wrapped-output' : ''}`} tabIndex={0} aria-label="Terminal output" onScroll={() => { const el = output.current!; following.current = el.scrollHeight - el.scrollTop - el.clientHeight < 40; }}>{session.output || (exited ? 'This program has exited.' : 'Waiting for output from your computer…')}</pre>
         <div className="activity-footer"><span>{structured ? 'Recent agent activity' : 'Recent output · 100 columns'}</span><span>{exited ? 'Program exited' : session.program}</span></div>
       </div>
       {structured && session.agent?.approvals.map(approval => <section className="panel approval-card" key={approval.id} aria-label={approval.title}>
@@ -106,17 +113,21 @@ function Workspace({ onRevoked }: { onRevoked: () => void }) {
           </SheetContent>
         </Sheet>
       </div>
-      <p className="help prompt-help">{structured && !exited ? 'Review requests below before approving. Some prompts need a terminal session.' : exited ? 'The program has exited. You can read its output or end this session to start another.' : agent ? 'Answer any setup or approval prompts above before giving Codex a task.' : 'Plain terminal: text goes to a shell. Use Confirm / Enter to execute it.'}</p>
+      <p className="help prompt-help">{structured && !exited ? 'Review approval requests above. Use Steer work to guide an active task.' : exited ? 'The program has exited. You can read its output or end this session to start another.' : agent ? 'Answer any setup or approval prompts above before giving Codex a task.' : 'Plain terminal: text goes to a shell. Use Confirm / Enter to execute it.'}</p>
       <form className={`message-composer ${structured ? 'agent-controls' : ''} ${speech.listening ? 'is-listening' : ''}`} onSubmit={event => { event.preventDefault(); void submit(); }}>
-        <label htmlFor="message" className="sr-only">{agent ? 'Message Codex' : 'Terminal text'}</label>
-        <Textarea id="message" value={draft} onChange={event => setDraft(event.target.value)} disabled={disabled || exited} placeholder={agent ? 'What would you like to work on?' : 'Type text or a command…'} rows={3} maxLength={2000} aria-describedby="input-note" onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); void submit(); } }} />
+        <div className="composer-heading"><label htmlFor="message">{agent ? 'Message Codex' : 'Terminal text'}</label><span>{!online ? 'Offline' : exited ? 'Session ended' : speech.listening ? 'Listening…' : structured && session.agent?.turnId ? 'Guide the current task' : agent ? 'Give your next instruction' : '1. Insert text · 2. Press Enter'}</span></div>
+        <Textarea id="message" value={draft} onChange={event => setDraft(event.target.value)} disabled={disabled || exited} placeholder={agent ? 'What would you like to work on?' : 'Type text or a command…'} rows={2} maxLength={2000} autoComplete="off" autoCapitalize={agent ? "sentences" : "off"} spellCheck={agent} enterKeyHint="send" aria-describedby="input-note" onKeyDown={event => { if (event.key === 'Enter' && !event.nativeEvent.isComposing) { event.preventDefault(); if (!event.shiftKey) void submit(); } }} />
+        {/[\x00-\x1f\x7f-\x9f]/.test(draft) && <p className="composer-warning" role="status">Use a single line. Review pasted text before sending.</p>}
+        {showRecent && <div className="recent-inputs" aria-label="Recent inputs"><p className="help">Choose an input to edit before sending.</p>{recent.map((text, index) => <button type="button" key={index} disabled={disabled || exited} onClick={() => { setDraft(text); setShowRecent(false); document.getElementById('message')?.focus(); }}>{text}</button>)}</div>}
         <div className="composer-actions">{speech.listening ? <Button type="button" variant="secondary" onClick={speech.stop}><CircleStop aria-hidden="true" />Stop dictation</Button> : <Confirm trigger={<><Mic aria-hidden="true" />Dictate</>} title="Use browser dictation?" description="Your browser may send microphone audio to its speech provider. Dictation adds text here for review; it will not be sent until you choose Send." action="Start dictation" disabled={disabled || exited || !speech.supported} onConfirm={speech.start} />}
-          <span className="composer-hint">{draft.length ? `${draft.length}/2000` : 'Text or voice. Your computer.'}</span>
+          <Button type="button" variant="ghost" className="recent-trigger" aria-label="Recent inputs" aria-expanded={showRecent} disabled={!recent.length || disabled || exited} onClick={() => setShowRecent(value => !value)}><History aria-hidden="true" /><span>Recent</span></Button>
+          {draft && <Button type="button" variant="ghost" className="clear-draft" aria-label="Clear draft" disabled={disabled || exited} onClick={() => setDraft('')}><X aria-hidden="true" /></Button>}
+          <span className="composer-hint">{draft.length}/2000</span>
           {structured && session.agent?.turnId && <Button type="button" disabled={disabled || exited || !draft.trim()} onClick={() => void submit(true)}>Steer work</Button>}
           <Button type="submit" disabled={disabled || exited || !draft.trim() || (structured && !!session.agent?.turnId)} aria-label={agent ? 'Send to Codex' : 'Insert text'}>{busy ? <LoaderCircle className="animate-spin" aria-hidden="true" /> : <ArrowUp aria-hidden="true" />}<span>{agent ? 'Send' : 'Insert text'}</span></Button>
         </div>
       </form>
-      <p className="help" id="input-note">{agent ? 'Send submits to Codex. Input is never queued or automatically resent.' : 'Insert text types into the terminal. Confirm / Enter is separate.'}</p>
+      <p className="help" id="input-note">{agent ? 'Enter to send · Input is never queued or automatically resent.' : 'Enter inserts your text. Use Confirm / Enter above to run the command.'}</p>
       <p className="help" role="status">{speech.status || (!speech.supported ? 'Browser dictation unavailable. You can use your keyboard’s microphone.' : '')}</p>
     </>}
     {!online && <p className="offline-message" role="status">Cannot reach your session. Your work may still be running. Reconnecting…</p>}

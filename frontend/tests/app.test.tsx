@@ -197,3 +197,23 @@ it('does not replace a slow status check with overlapping interval requests', as
     await screen.findByText('Slow Home Computer');
   } finally { vi.useRealTimers(); }
 });
+
+
+it('recalls acknowledged input for editing without sending and clears history for a new session', async () => {
+  const app = await boot(); const user = userEvent.setup();
+  await screen.findByText('Private terminal output');
+  const composer = screen.getByRole('textbox', { name: 'Message Codex' });
+  await user.type(composer, 'Review the changed files');
+  await user.click(screen.getByRole('button', { name: 'Send to Codex' }));
+  await waitFor(() => expect(composer).toHaveValue(''));
+  await user.click(screen.getByRole('button', { name: 'Recent inputs' }));
+  await user.click(screen.getByRole('button', { name: 'Review the changed files' }));
+  expect(composer).toHaveValue('Review the changed files');
+  expect(composer).toHaveFocus();
+  expect(app.posts).toHaveLength(1);
+  await user.click(screen.getByRole('button', { name: 'Clear draft' }));
+  expect(composer).toHaveValue('');
+  app.setSession({ ...fixture, id: 'another-session' });
+  await act(async () => { window.dispatchEvent(new Event('online')); });
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Recent inputs' })).toBeDisabled());
+});

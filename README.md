@@ -4,6 +4,8 @@ Hoso is an easy terminal: create a session on your computer and continue from yo
 
 The current developer prototype includes QR pairing, a shared desktop/phone terminal session, live plain-text output refreshed every second, and explicit input controls. A TypeScript/Node desktop service serves both interfaces from a shared React + shadcn/Base UI frontend, built with Vite and Tailwind. A private Hoso-managed tmux server runs the session; your existing tmux sessions are separate. There is no Hoso cloud backend or bundled AI provider.
 
+For the current UI review and release priorities, see the [review guide](docs/review.md). GitHub Actions runs the build, TypeScript checks, and automated tests on pushes and pull requests.
+
 ## Use a session
 
 1. Start Hoso and open the desktop setup link printed in the terminal.

@@ -17,3 +17,58 @@
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;transition-duration:.01ms!important;scroll-behavior:auto!important}}
 
 .approval-card{margin-top:16px;padding:18px}.approval-card h2{font-size:18px;margin-bottom:12px}.approval-card .terminal-output{height:auto;min-height:0;max-height:40dvh;padding:12px;background:var(--secondary);border-radius:8px;white-space:pre-wrap;overflow-wrap:anywhere}.agent-controls .composer-actions{flex-wrap:wrap}.agent-controls .composer-hint{display:none}
+
+/* Workspace input and output share a compact, readable visual hierarchy. */
+.workspace-heading h1 { font-size: clamp(26px, 3vw, 34px); letter-spacing: -1px; }
+.workspace-heading .eyebrow { margin-bottom: 8px; }
+.session-meta { padding: 0 2px; font-size: 12px; }
+.session-meta > span:last-child { flex-shrink: 0; border: 1px solid var(--border); border-radius: 6px; padding: 3px 8px; }
+.activity-panel { border-radius: 16px; box-shadow: 0 8px 28px #163f3510; }
+.activity-heading { height: 52px; }
+.activity-heading > span { font-size: 12px; font-weight: 600; }
+.output-actions { display: flex; align-items: center; gap: 2px; }
+.output-actions button { padding: 0 10px; }
+.output-actions [aria-pressed=true] { background: #ffffff16; color: #fff; }
+.terminal-output { font-size: 13px; line-height: 1.75; }
+.terminal-output.wrapped-output { white-space: pre-wrap; overflow-wrap: anywhere; }
+.prompt-help { max-width: 65ch; margin: 10px 2px 14px; font-size: 12px; }
+.message-composer { padding: 16px; border-radius: 16px; box-shadow: 0 8px 32px #163f3508; }
+.composer-heading { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; padding: 0 4px 10px; }
+.composer-heading label { font-size: 13px; font-weight: 650; }
+.composer-heading > span { font-size: 11px; color: var(--muted-foreground); text-align: right; }
+.message-composer textarea { min-height: 90px; padding: 8px 4px; }
+.message-composer:not(.agent-controls) textarea[spellcheck=false] { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; }
+.composer-actions { border-top: 1px solid #edf0e5; padding-top: 12px; gap: 6px; flex-wrap: wrap; }
+.composer-actions button { border-radius: 10px; }
+.composer-actions button[type=submit] { margin-left: auto; min-width: 96px; }
+.composer-actions .recent-trigger { color: var(--muted-foreground); padding: 0 10px; }
+.composer-actions .clear-draft { color: var(--muted-foreground); width: 40px; padding: 0; }
+.composer-hint { margin-right: 4px; font-variant-numeric: tabular-nums; }
+.composer-warning { font-size: 12px; color: #994a37; background: #fff4ee; border-radius: 8px; padding: 8px 10px; margin: 4px 0 10px; }
+.recent-inputs { border-top: 1px solid var(--border); padding: 12px 0; max-height: 220px; overflow-y: auto; }
+.recent-inputs > p { padding: 0 4px 8px; }
+.recent-inputs > button { display: block; width: 100%; min-height: 44px; text-align: left; padding: 10px; border: 0; border-radius: 8px; background: transparent; color: var(--foreground); font: 12px/1.6 ui-monospace, SFMono-Regular, Consolas, monospace; white-space: pre-wrap; overflow-wrap: anywhere; }
+.recent-inputs > button:hover { background: var(--muted); }
+.delivery-status:empty, .workspace > .help[role=status]:empty { display: none; }
+.approval-card { border-color: #b4c89d; box-shadow: 0 4px 18px #163f3506; }
+@media (max-width:760px) {
+  .app-shell { padding-left: 14px; padding-right: 14px; }
+  .brand-header { margin-bottom: 22px; }
+  .workspace { padding-top: 20px; }
+  .workspace-heading { margin-bottom: 16px; }
+  .workspace-heading h1, .phone-shell .workspace-heading h1 { font-size: 27px; }
+  .terminal-output { font-size: 12px; min-height: 180px; }
+  .phone-shell .terminal-output { height: 36dvh; }
+  .activity-heading { padding-left: 12px; padding-right: 6px; }
+  .activity-footer { font-size: 10px; }
+  .message-composer { padding: 12px; bottom: max(8px, env(safe-area-inset-bottom)); }
+  .composer-heading { gap: 8px; }
+  .composer-heading > span { font-size: 10px; max-width: 150px; }
+  .message-composer textarea { min-height: 76px; }
+  .composer-actions { gap: 4px; }
+  .composer-actions .recent-trigger { width: 40px; padding: 0; }
+  .recent-trigger > span { display: none; }
+  .session-meta { font-size: 11px; gap: 8px; }
+  .prompt-help { font-size: 11px; }
+}
+.phone-shell .approval-card .terminal-output { height: auto; min-height: 0; max-height: 40dvh; }

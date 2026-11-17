@@ -1,6 +1,14 @@
 # Next working session
 
-## Current checkpoint — 2026-11-08
+## Review workflow — 2026-11-17
+
+Added [a review guide and production release priorities](review.md), plus GitHub Actions for Node 24 TypeScript/build/HTTP/tmux/React checks on pushes and pull requests. Remote CI results and manual acceptance must be recorded separately from local checks.
+
+## UI polish checkpoint — 2026-11-17
+
+The user requested continuing with UI polish and deferred manual testing. Updated the shared workspace with a labeled composer, explicit terminal insert/Enter guidance, visible single-line paste guidance, clear-draft action, and recall of the last eight acknowledged inputs for review/editing. History exists only in component memory, clears on session changes, and never sends automatically. Added an output wrap toggle, empty-output guidance, clearer workspace titles, and refined mobile spacing, typography, and touch controls. Terminal execution still requires the separate Confirm / Enter action. No manual phone acceptance is claimed for these changes or the agent preview.
+
+## Previous checkpoint — 2026-11-08
 
 The user confirmed the earlier real-phone acceptance phase passed and requested richer agent controls. Added an optional **Codex with agent controls (preview)** launcher backed by the local stdio app-server protocol. It exposes authoritative turn activity, explicit steering/interrupt, and one-time command/file approval responses. The existing default Codex terminal and plain shell remain available. See [agent controls](agent-controls.md) for scope and next acceptance checks.
 
